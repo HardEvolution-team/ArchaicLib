@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "com.electrifiedded.archaiclib.mixin",
+  "plugin": "com.electrifiedded.archaiclib.ModMixinConfigPlugin",
+  "compatibilityLevel": "JAVA_25",
+  "target": "@env(DEFAULT)",
+  "client": [
+    "MinecraftMixin"
+  ],
+  "mixins": [
+  ],
+  "server": [],
+  "setSourceFile": true,
+  "minVersion": "0.8.7"
+}
