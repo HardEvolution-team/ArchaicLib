@@ -1,81 +1,71 @@
-# CleanroomModTemplate
-Mod development template for Cleanroom, uses a custom [Unimined fork](https://github.com/kappa-maintainer/Unimined) ([original](https://github.com/unimined/Unimined))
+# ArchaicLib
 
-### WARNING: Custom Unimined Fork
-May have issues, report here or [here](https://github.com/kappa-maintainer/Unimined) when you encountered impossible field names or impossible Scala compiler errors. 
+Shared compatibility library for ported old-version Minecraft mods. It brings legacy Minecraft APIs (1.7.10 and 1.8.9 style) to Minecraft 1.12.2 running on Cleanroom Loader.
 
-## DOs and DON'Ts
-### Choose Branch
-Choose mixin branch if you want to use Mixin.
+Version: 1.3.0 · Minecraft: 1.12.2 · Loader: Cleanroom only
 
-Use scala and kotlin branch if you want to use those languages. 
+## What it is
 
-There are 4 branches available:
-- main
-- mixin
-- scala
-- kotlin
+ArchaicLib is a library, not a standalone mod. Ported mods depend on it so they can keep using the APIs they were written against, instead of being rewritten for 1.12.2 each time.
 
-If you want to use non-main branches, after clicked *Create a new repository* under *Use this template*, check the *Include all branches* checkbox.
+It is also a coremod: it ships an access transformer and a loading plugin, and it applies a Mixin to `Minecraft`.
 
-### Running Client or Server
-If you are using IntelliJ, **DO NOT** use the `Minecraft Client` configure with a blue icon. Just use the `2. Run Client` Gradle task.
+## What it provides
 
-### Adding Mod Dependencies
-You can find dependencies block in `gradle/scripts/dependencies.gradle`.
+**1.7.10 compatibility (`v1710/api`, `v1710/client`)**
+- `ArchaicBlock`, `ArchaicItem`: base classes with the legacy block/item behaviour.
+- `IArchaicRenderBlock`, `ArchaicRenderPart`: custom block rendering with multiple render parts.
+- `IItemRenderer`, `ArchaicMinecraftForgeClient`: legacy item renderer hooks.
+- `IIcon`, `IIconRegister`, `ArchaicIcon`: legacy icon registration.
+- `ArchaicChannel`, `AbstractPacket`: legacy network packet channel.
+- `LegacyEntityMover`: legacy entity movement helper.
+- `ArchaicTEISR`, `ArchaicBakedModel`, `ArchaicModelLoader`: item/tile-entity rendering and model loading for legacy models.
 
-No more `rfg.deobf()` or `fg.deobf`. You **MUST** add mods by using `modImplementation` or `modRuntimeOnly`, or the game will crash when running.
+**1.8.9 compatibility (`v189`)**
+- `LegacyModelConverter189`: converts 1.8.9-format JSON models into the 1.12.2 format.
+- `LegacyModelResourcePack189`: resource pack wrapper that applies the conversion.
+- `LegacyModelHooks189`: hooks that connect the converter to model loading.
 
-Use `modLibrary` for libs/mods that you don't want to remap.
+**Legacy runtime helpers (`legacy/`)**
+- `entity/`: extended entity properties, a legacy `DataWatcher`, legacy entity list, inventory, and throwable base class.
+- `registry/`: `LegacyGameRegistry` for registering blocks, items, item models and entities with the old-style calls, plus `LegacyRecipes`.
+- `sound/`: `LegacySounds` for legacy sound registration.
+- `client/`: `LegacyTessellator`, `LegacySmartItemModel`, `LegacyModelRegistrar`.
 
-### Non-Mod Dependencies
-Two new configuration types `contain` and `shadow` are available, check more details in `dependencies.gradle`.
+**Core**
+- `ModMixinConfigPlugin`: controls which Mixins are applied.
+- `mixin/MinecraftMixin`: client-side Mixin into `Minecraft`.
+- `proxy/`: client and common proxies.
+- `ExampleLoadingPlugin`: coremod entry point, referenced from `gradle.properties`.
 
-### gradle.properties
-Edit gradle.properties and set your modid, mod version, mod name, package, etc.
+## Requirements
 
-If you are writing a coremod, remember to set related settings to true.
+- Minecraft 1.12.2
+- Cleanroom Loader
+- Java 25 (the Mixin config uses `JAVA_25` compatibility)
 
-### Reference Class
-There will be a `Reference` class under your top package.
+## Using it from another mod
 
-This is used to store mod version so you can fill it to `@Mod` annotation.
+Add ArchaicLib as a dependency in your mod's build, and list the ArchaicLib version your mod was built against. Mods that depend on ArchaicLib need it installed at runtime.
 
-You should change its location to fit your new package name.
+## Building
 
-You can find its template under `src/main/java-templates`.
+```
+./gradlew build
+```
 
-### Mixin
-1. Rename json config file to use your modid. 
-2. Add **all** your mixin classes there.
-3. Use `IMixinConfigPlugin` to control if certain mixin should be enabled.
-4. mixin classes will be passed to the plugin only when target class is loading, so you don't need to call `Loader.isModLoaded()`
-5. Don't worry about refmap, Unimined will handle it automatically. You can still `disableRefmap()` manually though
+Run the client or server through the Gradle run tasks. Use `genSources` if you need vanilla sources.
 
-### Access Transformer
-You **MUST** write AT file in MCP name. It will be remapped back to SRG name in artifact jar.
+## Status
 
-Rename AT file name to your modid before using it. There's an example entry in AT file, remove it if you want to use AT.
+- Builds and runs as a library. Used by ported mods in this workspace.
+- `ExampleMod` and the `java-templates` `Reference` class are leftovers from the Cleanroom template and are not part of the library API.
 
-### Vanilla Source Code with Comments
-Run `genSources` task in gradle. If it didn't work, run again until a file with `-sources.jar` suffix appeared.
+## License
 
-If you want to `find usage` from vanilla like RFG, just change the scope in IntelliJ settings.
+All rights reserved. The source is publicly visible, but it may not be copied, modified, redistributed or reused without the author's written permission. See [LICENSE](LICENSE).
 
-### GitHub Action
-This template comes with three workflows.
+## Links
 
-`build.yml` will build and upload artifact for every commit. Useful when you want to provide test builds for debugging.
-
-`release.yml` will make a GitHub release if you pushed a git tag.
-
-`release-to-cf-mr.yml` can publish your mod to CurseForge and/or Modrinth.
-
-You need to fill in your project IDs and configure your tokens in GitHub repository first.
-
-By default, you will need to manually trigger the workflow in web page, but you can also enable tag triggering by merging the third yml into `release.yml`.
-
-### Credit
-Thanks @Karnatour for fixing shadow plugin
-
-Thanks @ghostflyby for making kotlin branch
+- Discord: https://discord.gg/h8Se4W3BFa
+- Author: electrifiedded
