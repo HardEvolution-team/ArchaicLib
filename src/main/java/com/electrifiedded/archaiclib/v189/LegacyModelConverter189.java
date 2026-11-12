@@ -2,7 +2,9 @@ package com.electrifiedded.archaiclib.v189;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -16,7 +18,6 @@ public final class LegacyModelConverter189 {
     }
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
-    private static final String[] DISPLAY_SIDES = {"thirdperson", "firstperson"};
     private static final String[] FOLDERS = {"blocks/", "items/", "block/", "item/"};
     private static final String TEXTURES_PREFIX = "textures/";
     private static final String PNG = ".png";
@@ -28,7 +29,9 @@ public final class LegacyModelConverter189 {
     }
 
     public static byte[] convert(String path, byte[] data, TextureLookup lookup) {
-        if (data == null || data.length == 0 || !isModel(path)) return data;
+        if (data == null || data.length == 0) return data;
+        if (isSounds(path)) return convertSounds(namespaceOf(path), data, null);
+        if (!isModel(path)) return data;
         JsonElement parsed = parse(new String(data, StandardCharsets.UTF_8));
         if (parsed == null || !parsed.isJsonObject()) return data;
         JsonObject model = parsed.getAsJsonObject();
@@ -51,20 +54,139 @@ public final class LegacyModelConverter189 {
     }
 
     public static boolean convert(JsonObject model, String namespace, TextureLookup lookup) {
-        boolean changed = mapParent(model);
+        JsonElement parentElement = model.get("parent");
+        String parent = parentElement != null && parentElement.isJsonPrimitive() ? parentElement.getAsString() : null;
+        JsonObject display = model.has("display") && model.get("display").isJsonObject()
+                ? model.getAsJsonObject("display") : null;
+        boolean legacyDisplay = LegacyDisplayTransforms189.isLegacy(display);
+        boolean modernDisplay = display != null && hasModernKeys(display);
+        LegacyDisplayTransforms189.Kind kind = kindOf(model, parent, display);
+        boolean changed = false;
+        if (!modernDisplay && !model.has(LegacyItemTransforms189.MARKER)) {
+            // keep the untouched 1.8 numbers: the client renders them through the ported 1.8.9 pipeline
+            JsonObject marker = new JsonObject();
+            marker.add("raw", model.deepCopy());
+            if (display != null) marker.add("display", display.deepCopy());
+            model.add(LegacyItemTransforms189.MARKER, marker);
+            changed = true;
+        }
+
+        if (parent != null) {
+            String mapped = parent;
+            String bare = parent.startsWith("minecraft:") ? parent.substring("minecraft:".length()) : parent;
+            if ("builtin/generated".equals(bare) && !modernDisplay) {
+                // 1.8 items were parented to builtin/generated; in 1.12 hand/ground/head defaults live in item/*.
+                mapped = kind.isItem() ? kind.itemParent : "item/generated";
+            } else if (parent.indexOf(':') < 0 || parent.startsWith("minecraft:")) {
+                if (LegacyVanillaAssets189.isRemovedModel(bare)) mapped = LegacyVanillaAssets189.replacementModel(bare);
+            }
+            if (!mapped.equals(parent)) {
+                model.addProperty("parent", mapped);
+                changed = true;
+            }
+        }
         changed |= fixTextures(model, namespace, lookup);
-        changed |= mapDisplay(model);
+
+        if (display != null && legacyDisplay) {
+            changed |= LegacyDisplayTransforms189.convert(display, kind);
+        }
+        // A 1.8 root block model (elements, no parent) relied on hard-coded hand/GUI transforms.
+        if (parent == null && model.has("elements") && !modernDisplay) {
+            if (display == null) {
+                display = new JsonObject();
+                model.add("display", display);
+            } else if (!legacyDisplay && display.has("gui")) {
+                LegacyDisplayTransforms189.convert(display, kind);
+            }
+            LegacyDisplayTransforms189.addBlockDefaults(display);
+            changed = true;
+        }
         return changed;
     }
 
-    private static boolean mapParent(JsonObject model) {
-        JsonElement parentElement = model.get("parent");
-        if (parentElement == null || !parentElement.isJsonPrimitive()) return false;
-        String parent = parentElement.getAsString();
-        String mapped = "builtin/generated".equals(parent) ? "item/generated" : parent;
-        if (mapped.equals(parent)) return false;
-        model.addProperty("parent", mapped);
-        return true;
+    private static boolean hasModernKeys(JsonObject display) {
+        for (String k : new String[]{"thirdperson_righthand", "thirdperson_lefthand", "firstperson_righthand",
+                "firstperson_lefthand"}) { // ground/fixed/head/gui already existed in 1.8.8+
+            if (display.has(k)) return true;
+        }
+        return false;
+    }
+
+    private static LegacyDisplayTransforms189.Kind kindOf(JsonObject model, String parent, JsonObject display) {
+        if (model.has("elements")) return LegacyDisplayTransforms189.Kind.BLOCK;
+        String p = parent == null ? "" : parent.toLowerCase(java.util.Locale.ROOT);
+        boolean item = p.endsWith("builtin/generated") || p.startsWith("item/") || p.contains(":item/");
+        if (p.isEmpty()) {
+            JsonElement tex = model.get("textures");
+            item = tex != null && tex.isJsonObject() && tex.getAsJsonObject().has("layer0");
+        }
+        if (!item) return LegacyDisplayTransforms189.Kind.BLOCK;
+        if (p.endsWith("item/handheld_rod")) return LegacyDisplayTransforms189.Kind.ROD;
+        if (p.endsWith("item/handheld")) return LegacyDisplayTransforms189.Kind.HANDHELD;
+        return LegacyDisplayTransforms189.guessItemKind(display);
+    }
+
+    /** True for an {@code assets/<ns>/sounds.json} path. */
+    public static boolean isSounds(String path) {
+        if (path == null) return false;
+        String p = path.replace('\\', '/');
+        if (!p.startsWith("assets/") || !p.endsWith("/sounds.json")) return false;
+        return p.indexOf('/', "assets/".length()) == p.length() - "/sounds.json".length();
+    }
+
+    public interface SoundLookup {
+        /** @param path sound path without "sounds/" and ".ogg" */
+        boolean exists(String namespace, String path);
+    }
+
+    /**
+     * 1.8 resolved an unqualified sound file name against the namespace of the sounds.json that
+     * declared it; 1.9+ resolves it against "minecraft". Qualifies such names with the file's namespace.
+     * With a lookup, a name is only qualified when the file really exists in that namespace.
+     */
+    public static byte[] convertSounds(String namespace, byte[] data, SoundLookup lookup) {
+        if (data == null || data.length == 0 || namespace == null || "minecraft".equals(namespace)) return data;
+        JsonElement parsed = parse(new String(data, StandardCharsets.UTF_8));
+        if (parsed == null || !parsed.isJsonObject()) return data;
+        boolean changed = false;
+        for (Map.Entry<String, JsonElement> ev : parsed.getAsJsonObject().entrySet()) {
+            if (!ev.getValue().isJsonObject()) continue;
+            JsonElement list = ev.getValue().getAsJsonObject().get("sounds");
+            if (list == null || !list.isJsonArray()) continue;
+            JsonArray arr = list.getAsJsonArray();
+            for (int i = 0; i < arr.size(); i++) {
+                JsonElement s = arr.get(i);
+                if (s.isJsonPrimitive()) {
+                    String q = qualify(namespace, s.getAsString(), lookup);
+                    if (q != null) {
+                        arr.set(i, new JsonPrimitive(q));
+                        changed = true;
+                    }
+                } else if (s.isJsonObject()) {
+                    JsonObject o = s.getAsJsonObject();
+                    if (o.has("type") && "event".equals(o.get("type").getAsString())) continue;
+                    if (!o.has("name") || !o.get("name").isJsonPrimitive()) continue;
+                    String q = qualify(namespace, o.get("name").getAsString(), lookup);
+                    if (q != null) {
+                        o.addProperty("name", q);
+                        changed = true;
+                    }
+                }
+            }
+        }
+        return changed ? GSON.toJson(parsed).getBytes(StandardCharsets.UTF_8) : data;
+    }
+
+    private static String qualify(String namespace, String name, SoundLookup lookup) {
+        if (name == null || name.isEmpty() || name.indexOf(':') >= 0) return null;
+        if (lookup != null) {
+            try {
+                if (!lookup.exists(namespace, name)) return null;
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+        return namespace + ":" + name;
     }
 
     private static boolean fixTextures(JsonObject model, String namespace, TextureLookup lookup) {
@@ -90,20 +212,21 @@ public final class LegacyModelConverter189 {
         if (value.isEmpty() || value.charAt(0) == '#') return reference;
 
         int colon = value.indexOf(':');
-        String namespace = colon >= 0 ? value.substring(0, colon) : modelNamespace;
+        String namespace = colon >= 0 ? value.substring(0, colon) : "minecraft";
         String path = colon >= 0 ? value.substring(colon + 1) : value;
 
         path = normalizePath(path);
         if (path.isEmpty()) return reference;
-
-        if (colon < 0 && lookup != null) {
-            boolean own = exists(lookup, modelNamespace, path);
-            boolean vanilla = exists(lookup, "minecraft", path);
-            if (!own && vanilla) return path;
+        // 1.8 resolved unqualified textures against "minecraft"; old packs that put the file in their
+        // own namespace anyway are salvaged when the lookup can see it there.
+        if (colon < 0 && lookup != null && !"minecraft".equals(modelNamespace)
+                && exists(lookup, modelNamespace, path) && !exists(lookup, "minecraft", path)) {
             namespace = modelNamespace;
         }
-
-        if ("minecraft".equals(namespace) && colon < 0) return path;
+        if ("minecraft".equals(namespace)) {
+            String renamed = LegacyVanillaAssets189.renamedTexture(path);
+            return renamed != null ? renamed : path;
+        }
         return namespace + ":" + path;
     }
 
@@ -131,30 +254,6 @@ public final class LegacyModelConverter189 {
         } catch (Throwable ignored) {
             return false;
         }
-    }
-
-    private static boolean mapDisplay(JsonObject model) {
-        JsonElement displayElement = model.get("display");
-        if (displayElement == null || !displayElement.isJsonObject()) return false;
-        JsonObject display = displayElement.getAsJsonObject();
-        boolean changed = false;
-        for (String side : DISPLAY_SIDES) {
-            JsonElement old = display.get(side);
-            if (old == null) continue;
-            String right = side + "_righthand";
-            String left = side + "_lefthand";
-            if (!display.has(right)) {
-                display.add(right, old.deepCopy());
-                changed = true;
-            }
-            if (!display.has(left)) {
-                display.add(left, old.deepCopy());
-                changed = true;
-            }
-            display.remove(side);
-            changed = true;
-        }
-        return changed;
     }
 
     private static JsonElement parse(String text) {

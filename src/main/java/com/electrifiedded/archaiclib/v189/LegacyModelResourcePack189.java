@@ -32,6 +32,13 @@ public final class LegacyModelResourcePack189 implements IResourcePack {
     public InputStream getInputStream(ResourceLocation location) throws IOException {
         InputStream in = source.getInputStream(location);
         String path = pathOf(location);
+        if (LegacyModelConverter189.isSounds(path)) {
+            try (InputStream stream = in) {
+                byte[] raw = readAll(stream);
+                return new ByteArrayInputStream(LegacyModelConverter189.convertSounds(location.getNamespace(), raw,
+                        this::soundExists));
+            }
+        }
         if (!LegacyModelConverter189.isModel(path)) return in;
         try (InputStream stream = in) {
             byte[] raw = readAll(stream);
@@ -63,6 +70,14 @@ public final class LegacyModelResourcePack189 implements IResourcePack {
     @Override
     public String getPackName() {
         return source.getPackName();
+    }
+
+    private boolean soundExists(String namespace, String path) {
+        try {
+            return source.resourceExists(new ResourceLocation(namespace, "sounds/" + path + ".ogg"));
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private boolean textureExists(String namespace, String path) {

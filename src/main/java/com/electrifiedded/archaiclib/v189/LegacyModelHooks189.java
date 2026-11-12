@@ -14,6 +14,8 @@ import java.util.List;
 @SideOnly(Side.CLIENT)
 public final class LegacyModelHooks189 {
 
+    private static final org.apache.logging.log4j.Logger LOG = org.apache.logging.log4j.LogManager.getLogger("ArchaicLib");
+
     private LegacyModelHooks189() {}
 
     public static int install() {
@@ -27,8 +29,14 @@ public final class LegacyModelHooks189 {
                     && !(pack instanceof FolderResourcePack)) {
                 continue;
             }
+            // Packs of installed (modern) mods are left alone; only loose / legacy packs are translated.
+            if (pack instanceof net.minecraftforge.fml.client.FMLFileResourcePack
+                    || pack instanceof net.minecraftforge.fml.client.FMLFolderResourcePack) {
+                continue;
+            }
             packs.set(i, new LegacyModelResourcePack189(pack));
             wrapped++;
+            LOG.info("[ArchaicLib] 1.8 asset translation enabled for resource pack '{}'", pack.getPackName());
         }
         return wrapped;
     }

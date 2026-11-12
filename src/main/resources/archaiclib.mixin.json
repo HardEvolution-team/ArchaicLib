@@ -5,9 +5,17 @@
   "compatibilityLevel": "JAVA_25",
   "target": "@env(DEFAULT)",
   "client": [
-    "MinecraftMixin"
+    "MinecraftMixin",
+    "v189.ModelBlockMixin",
+    "v189.ModelBlockDeserializerMixin",
+    "v189.VanillaModelWrapperMixin",
+    "v189.RenderItemInvoker",
+    "v189.RenderItemMixin",
+    "v189.ItemRendererMixin",
+    "v189.LayerHeldItemMixin"
   ],
   "mixins": [
+    "v189.EntityFireballMixin"
   ],
   "server": [],
   "setSourceFile": true,

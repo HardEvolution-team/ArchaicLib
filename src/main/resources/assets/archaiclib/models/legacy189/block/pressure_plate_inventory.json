@@ -1,0 +1,1 @@
+{"parent": "block/thin_block", "textures": {"particle": "#texture"}, "elements": [{"from": [1, 6, 1], "to": [15, 10, 15], "faces": {"down": {"texture": "#texture"}, "up": {"texture": "#texture"}, "north": {"texture": "#texture"}, "south": {"texture": "#texture"}, "west": {"texture": "#texture"}, "east": {"texture": "#texture"}}}]}
