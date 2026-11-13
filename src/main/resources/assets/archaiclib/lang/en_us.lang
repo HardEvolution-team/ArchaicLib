@@ -1,0 +1,7 @@
+archaiclib.originals.title=Original mod files are missing
+archaiclib.originals.line1=Some ported mods load their textures from the original mod jar.
+archaiclib.originals.line2=Put the original jar into the "%s" folder (not into mods) and restart.
+archaiclib.originals.needed_by=needed by: %s
+archaiclib.originals.open_folder=Open folder
+archaiclib.originals.continue=Continue anyway
+archaiclib.originals.link=Get

@@ -2,7 +2,7 @@
 
 Shared compatibility library for ported old-version Minecraft mods. It brings legacy Minecraft APIs (1.7.10 and 1.8.9 style) to Minecraft 1.12.2 running on Cleanroom Loader.
 
-Version: 1.3.0 · Minecraft: 1.12.2 · Loader: Cleanroom only
+Version: 1.4.0 · Minecraft: 1.12.2 · Loader: Cleanroom only
 
 ## What it is
 
@@ -31,6 +31,11 @@ It is also a coremod: it ships an access transformer and a loading plugin, and i
 - `registry/`: `LegacyGameRegistry` for registering blocks, items, item models and entities with the old-style calls, plus `LegacyRecipes`.
 - `sound/`: `LegacySounds` for legacy sound registration.
 - `client/`: `LegacyTessellator`, `LegacySmartItemModel`, `LegacyModelRegistrar`.
+
+**Original-mod assets (`original/`, new in 1.4.0)**
+- `OriginalModAssets.require(portModId, originalModId, displayName, url, domains...)`: lets a port that contains no third-party assets (for example a clean reimplementation of an All-Rights-Reserved mod) read textures and models from the player's own copy of the original mod.
+- The player puts the original jar into `<game folder>/archaic_originals/` (not `mods/`); it is scanned at construction time and exposed as a resource pack with case-insensitive lookup. Nothing is extracted or copied.
+- If the jar is missing, a one-time screen on the main menu shows the download link and the exact folder.
 
 **Core**
 - `ModMixinConfigPlugin`: controls which Mixins are applied.

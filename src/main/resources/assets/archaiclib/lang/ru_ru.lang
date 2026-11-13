@@ -1,0 +1,7 @@
+archaiclib.originals.title=Не найдены файлы оригинальных модов
+archaiclib.originals.line1=Некоторые портированные моды берут текстуры из jar оригинального мода.
+archaiclib.originals.line2=Положите оригинальный jar в папку "%s" (не в mods) и перезапустите игру.
+archaiclib.originals.needed_by=нужен для: %s
+archaiclib.originals.open_folder=Открыть папку
+archaiclib.originals.continue=Продолжить
+archaiclib.originals.link=Скачать
