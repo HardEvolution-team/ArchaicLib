@@ -22,7 +22,21 @@ public final class LegacyModelRegistrar {
             if (p.item != null) ModelLoader.setCustomModelResourceLocation(p.item, p.meta, new ModelResourceLocation(p.location, p.variant));
         }
         LegacyGameRegistry.pendingModels().clear();
+        for (net.minecraft.block.Block b : com.electrifiedded.archaiclib.legacy.fluid.LegacyFluids.pendingLevelIgnored()) ignoreAll(b);
+        com.electrifiedded.archaiclib.legacy.fluid.LegacyFluids.pendingLevelIgnored().clear();
+        com.electrifiedded.archaiclib.legacy.fluid.LegacyFluids.lateStateMapperHook = LegacyModelRegistrar::ignoreAll;
         LegacyGameRegistry.lateModelHook = p -> Minecraft.getMinecraft().getRenderItem().getItemModelMesher()
                 .register(p.item, p.meta, new ModelResourceLocation(p.location, p.variant));
+    }
+
+    /** every state of the block -> registryName#normal (1.7 fluid blocks: LEVEL is not a model property) */
+    private static void ignoreAll(net.minecraft.block.Block b) {
+        final ModelResourceLocation loc = new ModelResourceLocation(b.getRegistryName(), "normal");
+        ModelLoader.setCustomStateMapper(b, new net.minecraft.client.renderer.block.statemap.StateMapperBase() {
+            @Override
+            protected ModelResourceLocation getModelResourceLocation(net.minecraft.block.state.IBlockState state) {
+                return loc;
+            }
+        });
     }
 }

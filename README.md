@@ -37,6 +37,9 @@ It is also a coremod: it ships an access transformer and a loading plugin, and i
 - The player puts the original jar into `<game folder>/archaic_originals/` (not `mods/`); it is scanned at construction time and exposed as a resource pack with case-insensitive lookup. Nothing is extracted or copied.
 - If the jar is missing, a one-time screen on the main menu shows the download link and the exact folder.
 
+**Digging NPCs (`world/`, new in 1.9.0)**
+- `DigSafety`: liquids next to a block about to be mined, lava/fire/magma around an entity, safe standing spots (solid floor, head room, no lava within a block), `quench` (lava source to obsidian, flowing lava to cobblestone, with fizz), falling-block check, and `canHarvest` (does this tool get drops from this block, like a player). Works with Forge fluid blocks too.
+
 **Core**
 - `ModMixinConfigPlugin`: controls which Mixins are applied.
 - `mixin/MinecraftMixin`: client-side Mixin into `Minecraft`.

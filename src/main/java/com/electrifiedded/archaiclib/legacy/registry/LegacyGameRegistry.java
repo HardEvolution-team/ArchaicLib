@@ -74,6 +74,12 @@ public final class LegacyGameRegistry {
         return MODELS;
     }
 
+    /** registerModEntity + 1.7 spawn egg in one call. */
+    public static void registerModEntity(Class<? extends Entity> cls, String name, int id, Object mod, int range, int freq, boolean velocity, int eggPrimary, int eggSecondary) {
+        String modid = activeModId();
+        EntityRegistry.registerModEntity(new ResourceLocation(modid, name), cls, modid + "." + name, id, mod, range, freq, velocity, eggPrimary, eggSecondary);
+    }
+
     public static void registerModEntity(Class<? extends Entity> cls, String name, int id, Object mod, int range, int freq, boolean velocity) {
         String modid = activeModId();
         EntityRegistry.registerModEntity(new ResourceLocation(modid, name), cls, modid + "." + name, id, mod, range, freq, velocity);

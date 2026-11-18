@@ -35,6 +35,8 @@ public final class OriginalModAssets {
 
     private static final Map<String, Requirement> REQUIREMENTS = new LinkedHashMap<>();
     private static File gameDir = new File(".");
+    /** lower-case "assets/domain/path" requested by 1.12 -> lower-case path inside the original jar */
+    private static final Map<String, String> ALIASES = new java.util.concurrent.ConcurrentHashMap<>();
 
     private OriginalModAssets() {}
 
@@ -93,6 +95,33 @@ public final class OriginalModAssets {
                     portModId, originalModId, folder().getAbsolutePath(), downloadUrl);
         }
         return req.jar != null;
+    }
+
+    /**
+     * Serve {@code domain:path} from a differently named file of the original jar, e.g. a 1.7 language file
+     * {@code lang/zh_CN1.lang} for the 1.12 request {@code lang/zh_cn.lang}, or a texture that the original
+     * keeps in another folder. Packs consult aliases on every lookup, so this may be called at any time
+     * before the resources are (re)loaded - for the first load that means the mod constructor.
+     */
+    public static void alias(String domain, String path, String originalPath) {
+        ALIASES.put(key(domain, path), key(domain, originalPath));
+    }
+
+    /**
+     * Never serve {@code domain:path} from the original jar, e.g. a 1.7 {@code sounds.json} whose unqualified
+     * sound names 1.12 would resolve against {@code minecraft:} (the port ships its own fixed copy).
+     */
+    public static void hide(String domain, String path) {
+        ALIASES.put(key(domain, path), "");
+    }
+
+    /** @return the aliased lower-case entry path ("" = hidden) for a lower-case request path, or null */
+    public static String aliasFor(String lowerAssetPath) {
+        return ALIASES.get(lowerAssetPath);
+    }
+
+    private static String key(String domain, String path) {
+        return ("assets/" + domain + "/" + path).toLowerCase(Locale.ROOT);
     }
 
     public static synchronized List<Requirement> all() {
@@ -189,6 +218,30 @@ public final class OriginalModAssets {
             int r;
             while ((r = i.read(buf)) > 0) out.write(buf, 0, r);
             return out.toByteArray();
+        }
+    }
+
+    /**
+     * Read a raw file of the original jar of {@code portModId} (any path, e.g. {@code assets/x/data/1.dat}),
+     * on either side - for data files (schematics, tables) a 1.7 mod read with getResourceAsStream.
+     * Requires a prior {@link #require}. Returns null when the jar or the entry is missing.
+     */
+    public static synchronized byte[] readOriginal(String portModId, String path) {
+        Requirement req = REQUIREMENTS.get(portModId);
+        if (req == null || req.jar == null) return null;
+        try (ZipFile zip = new ZipFile(req.jar)) {
+            ZipEntry e = zip.getEntry(path);
+            if (e == null) {
+                Enumeration<? extends ZipEntry> en = zip.entries();
+                while (en.hasMoreElements()) {
+                    ZipEntry c = en.nextElement();
+                    if (c.getName().equalsIgnoreCase(path)) { e = c; break; }
+                }
+            }
+            return e == null ? null : readAll(zip.getInputStream(e));
+        } catch (IOException ex) {
+            ExampleMod.LOGGER.warn("[{}] cannot read {} from {}: {}", portModId, path, req.jar, ex.toString());
+            return null;
         }
     }
 }

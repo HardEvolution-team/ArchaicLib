@@ -60,7 +60,9 @@ public final class OriginalJarResourcePack implements IResourcePack {
     }
 
     private String entryFor(ResourceLocation loc) {
-        return index.get(("assets/" + loc.getNamespace() + "/" + loc.getPath()).toLowerCase(Locale.ROOT));
+        String lower = ("assets/" + loc.getNamespace() + "/" + loc.getPath()).toLowerCase(Locale.ROOT);
+        String alias = OriginalModAssets.aliasFor(lower);
+        return alias != null ? index.get(alias) : index.get(lower);
     }
 
     @Override

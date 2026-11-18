@@ -58,8 +58,9 @@ public class ArchaicTEISR extends TileEntityItemStackRenderer {
             case INVENTORY -> {
                 GlStateManager.translate(0.5F, 0.5F, 0.5F);
                 GlStateManager.scale(0.625F, 0.625F, 0.625F);
+                // 1.7.10 RenderItem: rotate(210,X) rotate(45,Y) rotate(-90,Y) on a y-down GUI = Rx(30) Ry(-45) here
                 GlStateManager.rotate(30.0F, 1.0F, 0.0F, 0.0F);
-                GlStateManager.rotate(225.0F, 0.0F, 1.0F, 0.0F);
+                GlStateManager.rotate(-45.0F, 0.0F, 1.0F, 0.0F);
             }
             case EQUIPPED_FIRST_PERSON -> {
                 float sideMultiplier = isLeft ? -1.0F : 1.0F;

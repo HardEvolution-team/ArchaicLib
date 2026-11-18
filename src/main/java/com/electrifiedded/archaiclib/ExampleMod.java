@@ -28,6 +28,7 @@ public class ExampleMod {
         LOGGER.info("Proxy is {}", proxy);
         com.electrifiedded.archaiclib.original.OriginalModAssets.setGameDir(net.minecraftforge.fml.common.Loader.instance().getConfigDir().getParentFile());
         proxy.initLegacyRendering();
+        com.electrifiedded.archaiclib.ghost.GhostRecipeTransfer.initNetwork();
     }
 
 }

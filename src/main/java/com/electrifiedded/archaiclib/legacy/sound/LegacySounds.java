@@ -67,6 +67,18 @@ public final class LegacySounds {
         LEGACY.put("portal.trigger", SoundEvents.BLOCK_PORTAL_TRIGGER);
         LEGACY.put("portal.travel", SoundEvents.BLOCK_PORTAL_TRAVEL);
 
+        // 1.7 short/old names (1.10.x 1.11.0)
+        LEGACY.put("mob.cow", SoundEvents.ENTITY_COW_AMBIENT);
+        LEGACY.put("mob.cowhurt", SoundEvents.ENTITY_COW_HURT);
+        LEGACY.put("mob.cow.step", SoundEvents.ENTITY_COW_STEP);
+        LEGACY.put("mob.pig", SoundEvents.ENTITY_PIG_AMBIENT);
+        LEGACY.put("mob.pigdeath", SoundEvents.ENTITY_PIG_DEATH);
+        LEGACY.put("mob.pig.step", SoundEvents.ENTITY_PIG_STEP);
+        LEGACY.put("mob.chicken.step", SoundEvents.ENTITY_CHICKEN_STEP);
+        LEGACY.put("mob.chicken.plop", SoundEvents.ENTITY_CHICKEN_EGG);
+        LEGACY.put("mob.zombie.step", SoundEvents.ENTITY_ZOMBIE_STEP);
+        LEGACY.put("ambient.cave.cave", SoundEvents.AMBIENT_CAVE);
+        LEGACY.put("mob.wither.break_block", SoundEvents.ENTITY_WITHER_BREAK_BLOCK);
         LEGACY.put("mob.zombie.say", SoundEvents.ENTITY_ZOMBIE_AMBIENT);
         LEGACY.put("mob.zombie.hurt", SoundEvents.ENTITY_ZOMBIE_HURT);
         LEGACY.put("mob.zombie.death", SoundEvents.ENTITY_ZOMBIE_DEATH);
@@ -101,6 +113,10 @@ public final class LegacySounds {
         LEGACY.put("mob.villager.idle", SoundEvents.ENTITY_VILLAGER_AMBIENT);
         LEGACY.put("mob.villager.hit", SoundEvents.ENTITY_VILLAGER_HURT);
         LEGACY.put("mob.villager.death", SoundEvents.ENTITY_VILLAGER_DEATH);
+        LEGACY.put("mob.sheep.shear", SoundEvents.ENTITY_SHEEP_SHEAR);
+        LEGACY.put("mob.villager.haggle", SoundEvents.ENTITY_VILLAGER_TRADING);
+        LEGACY.put("mob.villager.no", SoundEvents.ENTITY_VILLAGER_NO);
+        LEGACY.put("mob.villager.yes", SoundEvents.ENTITY_VILLAGER_YES);
         LEGACY.put("mob.irongolem.hit", SoundEvents.ENTITY_IRONGOLEM_HURT);
         LEGACY.put("mob.irongolem.death", SoundEvents.ENTITY_IRONGOLEM_DEATH);
         LEGACY.put("mob.zombiepig.zpig", SoundEvents.ENTITY_ZOMBIE_PIG_AMBIENT);
@@ -125,6 +141,8 @@ public final class LegacySounds {
         LEGACY.put("mob.wither.idle", SoundEvents.ENTITY_WITHER_AMBIENT);
         LEGACY.put("mob.wither.hurt", SoundEvents.ENTITY_WITHER_HURT);
         LEGACY.put("mob.wither.death", SoundEvents.ENTITY_WITHER_DEATH);
+        LEGACY.put("mob.spider.step", SoundEvents.ENTITY_SPIDER_STEP);
+        LEGACY.put("mob.wolf.step", SoundEvents.ENTITY_WOLF_STEP);
     }
 
     private LegacySounds() {}
