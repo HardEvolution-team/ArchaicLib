@@ -33,6 +33,8 @@ public final class OriginalJarResourcePack implements IResourcePack {
     private final Set<String> domains = new HashSet<>();
     /** lower-case path -> real entry name */
     private final Map<String, String> index = new HashMap<>();
+    /** lower-case path -> real entry name of assets/minecraft/** (only reachable through aliases) */
+    private final Map<String, String> hiddenIndex = new HashMap<>();
     private ZipFile zip;
 
     public OriginalJarResourcePack(File file, Iterable<String> domains) {
@@ -46,7 +48,9 @@ public final class OriginalJarResourcePack implements IResourcePack {
                 String lower = e.getName().toLowerCase(Locale.ROOT);
                 if (!lower.startsWith("assets/")) continue;
                 int slash = lower.indexOf('/', 7);
-                if (slash < 0 || !this.domains.contains(lower.substring(7, slash))) continue;
+                if (slash < 0) continue;
+                if (lower.startsWith("assets/minecraft/") && !this.domains.contains("minecraft")) { hiddenIndex.putIfAbsent(lower, e.getName()); continue; }
+                if (!this.domains.contains(lower.substring(7, slash))) continue;
                 index.putIfAbsent(lower, e.getName());
             }
         } catch (IOException e) {
@@ -60,9 +64,45 @@ public final class OriginalJarResourcePack implements IResourcePack {
     }
 
     private String entryFor(ResourceLocation loc) {
-        String lower = ("assets/" + loc.getNamespace() + "/" + loc.getPath()).toLowerCase(Locale.ROOT);
-        String alias = OriginalModAssets.aliasFor(lower);
-        return alias != null ? index.get(alias) : index.get(lower);
+        String ns = loc.getNamespace();
+        String orig = OriginalModAssets.originalDomainOf(ns);
+        if (orig != null) {
+            if (!domains.contains(orig)) return null;
+        } else if (OriginalModAssets.isRemapped(ns)) {
+            return null; // the original domain is only reachable under its port name
+        }
+        String req = ("assets/" + ns + "/" + loc.getPath()).toLowerCase(Locale.ROOT);
+        String alias = OriginalModAssets.aliasFor(req);
+        String target = alias != null ? alias : req;
+        if (orig != null && target.startsWith("assets/" + ns + "/"))
+            target = "assets/" + orig + target.substring(("assets/" + ns).length());
+        String r = index.get(target);
+        return r != null || alias == null ? r : hiddenIndex.get(target);
+    }
+
+    /**
+     * Every asset path this pack serves, lower-case (lookups are case-insensitive), plus the port-side names of
+     * aliased files. For resource listers such as VintageFix's texture pass.
+     */
+    public java.util.List<String> listPaths(java.util.function.Predicate<String> filter) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String lower : index.keySet()) {
+            String l = lower;
+            int slash = l.indexOf('/', 7);
+            String d = l.substring(7, slash);
+            if (OriginalModAssets.isRemapped(d)) {
+                for (Map.Entry<String, String> m : OriginalModAssets.domainMap().entrySet()) {
+                    if (m.getValue().equals(d)) { String r = "assets/" + m.getKey() + l.substring(slash); if (filter.test(r)) out.add(r); }
+                }
+                continue;
+            }
+            if (filter.test(l)) out.add(l);
+        }
+        for (String req : OriginalModAssets.aliasKeys()) {
+            String target = OriginalModAssets.aliasFor(req);
+            if (target != null && !target.isEmpty() && (index.containsKey(target) || hiddenIndex.containsKey(target)) && filter.test(req)) out.add(req);
+        }
+        return out;
     }
 
     @Override
@@ -75,12 +115,15 @@ public final class OriginalJarResourcePack implements IResourcePack {
 
     @Override
     public boolean resourceExists(ResourceLocation loc) {
-        return domains.contains(loc.getNamespace()) && entryFor(loc) != null;
+        return entryFor(loc) != null;
     }
 
     @Override
     public Set<String> getResourceDomains() {
-        return domains;
+        Set<String> out = new HashSet<>();
+        for (String d : domains) if (!OriginalModAssets.isRemapped(d)) out.add(d);
+        for (Map.Entry<String, String> m : OriginalModAssets.domainMap().entrySet()) if (domains.contains(m.getValue())) out.add(m.getKey());
+        return out;
     }
 
     @Override

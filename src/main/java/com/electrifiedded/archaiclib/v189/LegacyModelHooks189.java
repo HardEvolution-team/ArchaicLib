@@ -30,8 +30,9 @@ public final class LegacyModelHooks189 {
                 continue;
             }
             // Packs of installed (modern) mods are left alone; only loose / legacy packs are translated.
-            if (pack instanceof net.minecraftforge.fml.client.FMLFileResourcePack
-                    || pack instanceof net.minecraftforge.fml.client.FMLFolderResourcePack) {
+            IResourcePack inner = unwrap(pack);
+            if (inner instanceof net.minecraftforge.fml.client.FMLFileResourcePack
+                    || inner instanceof net.minecraftforge.fml.client.FMLFolderResourcePack) {
                 continue;
             }
             packs.set(i, new LegacyModelResourcePack189(pack));
@@ -44,6 +45,24 @@ public final class LegacyModelHooks189 {
     public static IResourcePack wrap(IResourcePack pack) {
         if (pack == null || pack instanceof LegacyModelResourcePack189) return pack;
         return new LegacyModelResourcePack189(pack);
+    }
+
+    /** Mod jars without pack.mcmeta are wrapped in LegacyV2Adapter: look at the real pack inside. */
+    private static IResourcePack unwrap(IResourcePack pack) {
+        for (int guard = 0; pack instanceof LegacyV2Adapter && guard < 4; guard++) {
+            IResourcePack inner = null;
+            for (Field f : LegacyV2Adapter.class.getDeclaredFields()) {
+                if (!IResourcePack.class.isAssignableFrom(f.getType())) continue;
+                try {
+                    f.setAccessible(true);
+                    inner = (IResourcePack) f.get(pack);
+                } catch (Throwable ignored) {}
+                break;
+            }
+            if (inner == null || inner == pack) break;
+            pack = inner;
+        }
+        return pack;
     }
 
     @SuppressWarnings("unchecked")

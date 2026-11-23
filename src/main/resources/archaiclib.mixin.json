@@ -12,7 +12,8 @@
     "v189.RenderItemInvoker",
     "v189.RenderItemMixin",
     "v189.ItemRendererMixin",
-    "v189.LayerHeldItemMixin"
+    "v189.LayerHeldItemMixin",
+    "v1710.ItemRenderer1710Mixin"
   ],
   "mixins": [
     "v189.EntityFireballMixin"

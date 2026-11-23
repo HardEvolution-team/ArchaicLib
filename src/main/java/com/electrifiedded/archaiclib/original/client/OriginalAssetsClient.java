@@ -35,9 +35,7 @@ public final class OriginalAssetsClient {
     private static void addPack(java.io.File jar, List<String> domains) {
         if (jar == null || !ADDED.add(jar.getAbsoluteFile())) return;
         try {
-            List<IResourcePack> packs = (List<IResourcePack>) ReflectionHelper.getPrivateValue(
-                    Minecraft.class, Minecraft.getMinecraft(), "defaultResourcePacks", "field_110449_ao");
-            packs.add(new OriginalJarResourcePack(jar, domains));
+            com.electrifiedded.archaiclib.client.resources.ArchaicPackInstaller.addDefaultPack(new OriginalJarResourcePack(jar, domains));
             ExampleMod.LOGGER.info("Original assets pack {} serves {}", jar.getName(), domains);
         } catch (Throwable t) {
             ExampleMod.LOGGER.error("Could not register original assets from {}", jar, t);

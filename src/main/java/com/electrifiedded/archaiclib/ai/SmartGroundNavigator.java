@@ -13,6 +13,7 @@ import net.minecraft.pathfinding.PathPoint;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
@@ -103,6 +104,116 @@ public class SmartGroundNavigator extends PathNavigateGround {
         if (openDoors) openAhead();
         if (closeBehind && !opened.isEmpty() && tick % 5 == 0) closeBehind();
         if (tick % CHECK_INTERVAL == 0) watchdog();
+    }
+
+    // --- path following -------------------------------------------------------------------------------
+
+    /**
+     * Vanilla path following with two changes that stop mobs wedging themselves in doorways and on corners:
+     * <ul>
+     *     <li>a "narrow" path point (door, gate, a cell walled in on both sides across the way) and the point
+     *     before it are only counted as reached when the mob is close to the cell centre, so it lines up with
+     *     the opening before it walks in instead of hitting the frame at an angle;</li>
+     *     <li>no shortcut past or diagonally into a narrow point, and a shortcut must be clear along both
+     *     edges of the body, not only along its centre line (vanilla checks a strip one block wide, which
+     *     clips corners for mobs walking off-centre).</li>
+     * </ul>
+     */
+    @Override
+    protected void pathFollow() {
+        Path path = currentPath;
+        Vec3d pos = getEntityPosition();
+        int len = path.getCurrentPathLength();
+        int sameLevelEnd = len;
+        for (int j = path.getCurrentPathIndex(); j < len; j++) {
+            if (path.getPathPointFromIndex(j).y != Math.floor(pos.y)) {
+                sameLevelEnd = j;
+                break;
+            }
+        }
+        float loose = entity.width > 0.75F ? entity.width / 2.0F : 0.75F - entity.width / 2.0F;
+        int cur = path.getCurrentPathIndex();
+        boolean tight = isNarrow(path, cur) || cur + 1 < len && isNarrow(path, cur + 1);
+        maxDistanceToWaypoint = tight ? Math.min(loose, 0.22F) : loose;
+        Vec3d at = path.getCurrentPos();
+        if (Math.abs(entity.posX - (at.x + 0.5)) < maxDistanceToWaypoint
+                && Math.abs(entity.posZ - (at.z + 0.5)) < maxDistanceToWaypoint
+                && Math.abs(entity.posY - at.y) < 1.0) {
+            path.setCurrentPathIndex(cur + 1);
+            cur++;
+        }
+        // shortcuts never skip a narrow point: it has to be walked into straight from the point before it
+        int limit = sameLevelEnd - 1;
+        for (int j = cur; j <= limit; j++) {
+            if (isNarrow(path, j)) {
+                limit = j == cur ? cur : j - 1;
+                break;
+            }
+        }
+        int sx = MathHelper.ceil(entity.width), sy = MathHelper.ceil(entity.height);
+        for (int j = limit; j > cur; j--) {
+            Vec3d to = path.getVectorFromIndex(entity, j);
+            if (isDirectPathBetweenPoints(pos, to, sx, sy, sx) && edgesClear(pos, to, sx, sy)) {
+                path.setCurrentPathIndex(j);
+                break;
+            }
+        }
+        checkForStuck(pos);
+    }
+
+    /** The straight walk is also clear along the left and right edge of the body. */
+    private boolean edgesClear(Vec3d from, Vec3d to, int sx, int sy) {
+        double dx = to.x - from.x, dz = to.z - from.z;
+        double l = Math.sqrt(dx * dx + dz * dz);
+        if (l < 1e-4) return true;
+        double half = entity.width / 2.0 + 0.05;
+        double px = -dz / l * half, pz = dx / l * half;
+        for (int s = -1; s <= 1; s += 2) {
+            Vec3d a = from.add(px * s, 0, pz * s), b = to.add(px * s, 0, pz * s);
+            if (!isDirectPathBetweenPoints(a, b, sx, sy, sx)) return false;
+        }
+        return true;
+    }
+
+    /** Doors, gates and one-wide gaps (walled on both sides across the direction of travel) along the path. */
+    protected boolean isNarrow(Path path, int i) {
+        if (i < 0 || i >= path.getCurrentPathLength()) return false;
+        if (path != narrowPath || narrowCache.length != path.getCurrentPathLength()) {
+            narrowPath = path;
+            narrowCache = new byte[path.getCurrentPathLength()];
+        }
+        if (narrowCache[i] == 0) narrowCache[i] = computeNarrow(path, i) ? (byte) 1 : (byte) 2;
+        return narrowCache[i] == 1;
+    }
+
+    private Path narrowPath;
+    private byte[] narrowCache = new byte[0];
+
+    private boolean computeNarrow(Path path, int i) {
+        PathPoint pt = path.getPathPointFromIndex(i);
+        BlockPos p = new BlockPos(pt.x, pt.y, pt.z);
+        if (isPassageBlock(world.getBlockState(p)) || isPassageBlock(world.getBlockState(p.up()))) return true;
+        PathPoint ref = i > 0 ? path.getPathPointFromIndex(i - 1) : i + 1 < path.getCurrentPathLength() ? path.getPathPointFromIndex(i + 1) : null;
+        if (ref == null) return false;
+        int dx = pt.x - ref.x, dz = pt.z - ref.z;
+        int head = Math.max(1, MathHelper.ceil(entity.height)) - 1;
+        if (dx != 0 && wallsBoth(p, EnumFacing.NORTH, head)) return true;
+        return dz != 0 && wallsBoth(p, EnumFacing.WEST, head);
+    }
+
+    private boolean wallsBoth(BlockPos p, EnumFacing side, int head) {
+        boolean a = false, b = false;
+        for (int y = 0; y <= head; y++) {
+            a |= TerrainAssist.blocks(world, p.up(y).offset(side));
+            b |= TerrainAssist.blocks(world, p.up(y).offset(side.getOpposite()));
+        }
+        return a && b;
+    }
+
+    /** Doors, fence gates and trapdoors: blocks a mob has to pass through square-on. */
+    public static boolean isPassageBlock(IBlockState s) {
+        net.minecraft.block.Block b = s.getBlock();
+        return b instanceof BlockDoor || b instanceof BlockFenceGate || b instanceof net.minecraft.block.BlockTrapDoor;
     }
 
     // --- doors and gates ------------------------------------------------------------------------------
@@ -233,14 +344,22 @@ public class SmartGroundNavigator extends PathNavigateGround {
     private boolean popOutOfBlock() {
         AxisAlignedBB box = entity.getEntityBoundingBox().shrink(0.05);
         if (world.getCollisionBoxes(entity, box).isEmpty()) return false;
+        // a door/gate/trapdoor closing on the mob, or a pane/fence edge it leans on, is not "inside a block"
+        boolean solidInside = false;
+        for (BlockPos p : BlockPos.getAllInBoxMutable(new BlockPos(box.minX, box.minY, box.minZ), new BlockPos(box.maxX, box.maxY, box.maxZ))) {
+            net.minecraft.block.state.IBlockState st = world.getBlockState(p);
+            if (st.isNormalCube() && st.getCollisionBoundingBox(world, p) != null) { solidInside = true; break; }
+        }
+        if (!solidInside) return false;
         BlockPos feet = new BlockPos(entity);
         BlockPos best = null;
         double bd = Double.MAX_VALUE;
-        for (BlockPos p : BlockPos.getAllInBoxMutable(feet.add(-2, -1, -2), feet.add(2, 2, 2))) {
+        for (BlockPos p : BlockPos.getAllInBoxMutable(feet.add(-2, -1, -2), feet.add(2, 1, 2))) {
             AxisAlignedBB at = entity.getEntityBoundingBox().offset(p.getX() + 0.5 - entity.posX, p.getY() - entity.posY, p.getZ() + 0.5 - entity.posZ);
             if (!world.getCollisionBoxes(entity, at).isEmpty() || world.containsAnyLiquid(at)) continue;
             if (!world.getBlockState(p.down()).getMaterial().blocksMovement()) continue;
-            double d = p.distanceSq(feet);
+            // stay on the same level: never onto a wall top when a spot beside it is free
+            double d = p.distanceSq(feet) + (p.getY() > feet.getY() ? 6 : 0);
             if (d < bd) { bd = d; best = p.toImmutable(); }
         }
         if (best == null) return false;

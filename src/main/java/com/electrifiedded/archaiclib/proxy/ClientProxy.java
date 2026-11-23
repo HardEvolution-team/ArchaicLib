@@ -6,7 +6,9 @@ import com.electrifiedded.archaiclib.v189.LegacyModelHooks189;
 public class ClientProxy implements IProxy {
     @Override
     public void construct() {
+        com.electrifiedded.archaiclib.client.resources.ArchaicPackInstaller.fixModPackFormats();
         com.electrifiedded.archaiclib.original.client.OriginalAssetsClient.install();
+        com.electrifiedded.archaiclib.compat.VintageFixCompat.install();
     }
 
     @Override

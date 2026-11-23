@@ -38,7 +38,35 @@ public final class OriginalModAssets {
     /** lower-case "assets/domain/path" requested by 1.12 -> lower-case path inside the original jar */
     private static final Map<String, String> ALIASES = new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** lower-case port asset domain -> lower-case domain name inside the original jar */
+    private static final Map<String, String> DOMAIN_MAP = new java.util.concurrent.ConcurrentHashMap<>();
+
     private OriginalModAssets() {}
+
+    /**
+     * The port uses another asset domain (its modid) than the original jar, e.g. the port's modid
+     * "orespawndedsport" while the jar has assets/orespawn/. Requests for {@code portDomain:*} are served from
+     * the jar's {@code originalDomain}; that original domain itself is then no longer exposed, so it cannot
+     * clash with the real mod of that name. Call it in the mod constructor, before the first resource reload.
+     */
+    public static void mapDomain(String portDomain, String originalDomain) {
+        DOMAIN_MAP.put(portDomain.toLowerCase(Locale.ROOT), originalDomain.toLowerCase(Locale.ROOT));
+    }
+
+    /** @return the jar domain behind a mapped port domain, or null */
+    public static String originalDomainOf(String portDomain) {
+        return DOMAIN_MAP.get(portDomain);
+    }
+
+    /** @return true if the (jar) domain is served under another name */
+    public static boolean isRemapped(String originalDomain) {
+        return DOMAIN_MAP.containsValue(originalDomain);
+    }
+
+    /** @return port domain -> jar domain */
+    public static Map<String, String> domainMap() {
+        return java.util.Collections.unmodifiableMap(DOMAIN_MAP);
+    }
 
     /** One original jar that a port needs for its assets. */
     public static final class Requirement {
@@ -108,11 +136,25 @@ public final class OriginalModAssets {
     }
 
     /**
+     * Like {@link #alias} but the original file lives in another asset domain of the jar, typically
+     * {@code minecraft} (MCreator-style 1.7 mods keep textures in assets/minecraft/textures/...).
+     * The "minecraft" domain of the jar is never exposed itself, only reachable through such aliases.
+     */
+    public static void aliasFromDomain(String domain, String path, String originalDomain, String originalPath) {
+        ALIASES.put(key(domain, path), key(originalDomain, originalPath));
+    }
+
+    /**
      * Never serve {@code domain:path} from the original jar, e.g. a 1.7 {@code sounds.json} whose unqualified
      * sound names 1.12 would resolve against {@code minecraft:} (the port ships its own fixed copy).
      */
     public static void hide(String domain, String path) {
         ALIASES.put(key(domain, path), "");
+    }
+
+    /** all aliased request paths (lower-case asset paths) */
+    public static java.util.Set<String> aliasKeys() {
+        return java.util.Collections.unmodifiableSet(ALIASES.keySet());
     }
 
     /** @return the aliased lower-case entry path ("" = hidden) for a lower-case request path, or null */
@@ -145,7 +187,7 @@ public final class OriginalModAssets {
         File fallback = null;
         for (File f : files) {
             String n = f.getName().toLowerCase(Locale.ROOT);
-            if (!f.isFile() || !(n.endsWith(".jar") || n.endsWith(".zip"))) continue;
+            if (!f.isFile() || !(n.endsWith(".jar") || n.endsWith(".zip") || n.endsWith(".pak"))) continue;
             try (ZipFile zip = new ZipFile(f)) {
                 boolean hasDomains = true;
                 for (String d : domains) {
@@ -171,7 +213,7 @@ public final class OriginalModAssets {
         if (files == null) return out;
         for (File f : files) {
             String n = f.getName().toLowerCase(Locale.ROOT);
-            if (!f.isFile() || !(n.endsWith(".jar") || n.endsWith(".zip"))) continue;
+            if (!f.isFile() || !(n.endsWith(".jar") || n.endsWith(".zip") || n.endsWith(".pak"))) continue;
             try (ZipFile zip = new ZipFile(f)) {
                 List<String> domains = new ArrayList<>();
                 Enumeration<? extends ZipEntry> en = zip.entries();

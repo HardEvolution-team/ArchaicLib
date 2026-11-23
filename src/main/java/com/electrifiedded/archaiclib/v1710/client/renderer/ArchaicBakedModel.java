@@ -308,7 +308,21 @@ public class ArchaicBakedModel implements IBakedModel {
         q.general.add(BAKERY.makeBakedQuad(from, to, new BlockPartFace(null, tint, "", new BlockFaceUV(uv.clone(), 0)), s, b, rot, r, false, true));
     }
 
+    /** per-state memo: quadsFor is hit ~8x per block per chunk rebuild (7 sides + AO). */
+    private final java.util.concurrent.ConcurrentHashMap<IBlockState, Quads> stateQuads = new java.util.concurrent.ConcurrentHashMap<>();
+
     private Quads quadsFor(@Nullable IBlockState state) {
+        if (state != null && !(state instanceof net.minecraftforge.common.property.IExtendedBlockState)) {
+            Quads c = stateQuads.get(state);
+            if (c != null) return c;
+            c = quadsFor0(state);
+            stateQuads.put(state, c);
+            return c;
+        }
+        return quadsFor0(state);
+    }
+
+    private Quads quadsFor0(@Nullable IBlockState state) {
         int key = 0;
         EnumFacing up = EnumFacing.UP;
         if (state != null && state.getBlock() == block) {

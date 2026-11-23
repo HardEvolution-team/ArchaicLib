@@ -12,6 +12,8 @@ import net.minecraftforge.oredict.ShapelessOreRecipe;
 
 public final class LegacyRecipes {
     private static final Map<String, Integer> COUNTERS = new HashMap<>();
+    /** Conditional recipes and their conditions; JEI integration hides the inactive ones. */
+    public static final Map<IRecipe, java.util.function.BooleanSupplier> CONDITIONAL = new java.util.LinkedHashMap<>();
 
     private LegacyRecipes() {}
 
@@ -34,6 +36,47 @@ public final class LegacyRecipes {
         ResourceLocation name = nextName(output);
         IRecipe r = new ShapelessOreRecipe(name, output, ingredients).setRegistryName(name);
         ForgeRegistries.RECIPES.register(r);
+        return r;
+    }
+
+    /**
+     * Shaped recipe that only matches while {@code condition} is true - for old mods that added/removed recipes at
+     * runtime from config or per-world settings (1.12 recipes are registered once).
+     */
+    public static IRecipe addConditionalRecipe(java.util.function.BooleanSupplier condition, ItemStack output, Object... params) {
+        ResourceLocation name = nextName(output);
+        IRecipe r = new ShapedOreRecipe(name, output, params) {
+            @Override
+            public boolean matches(net.minecraft.inventory.InventoryCrafting inv, net.minecraft.world.World world) {
+                return condition.getAsBoolean() && super.matches(inv, world);
+            }
+
+            @Override
+            public boolean isDynamic() {
+                return true;
+            }
+        }.setRegistryName(name);
+        ForgeRegistries.RECIPES.register(r);
+        CONDITIONAL.put(r, condition);
+        return r;
+    }
+
+    /** Shapeless variant of {@link #addConditionalRecipe}. */
+    public static IRecipe addConditionalShapelessRecipe(java.util.function.BooleanSupplier condition, ItemStack output, Object... ingredients) {
+        ResourceLocation name = nextName(output);
+        IRecipe r = new ShapelessOreRecipe(name, output, ingredients) {
+            @Override
+            public boolean matches(net.minecraft.inventory.InventoryCrafting inv, net.minecraft.world.World world) {
+                return condition.getAsBoolean() && super.matches(inv, world);
+            }
+
+            @Override
+            public boolean isDynamic() {
+                return true;
+            }
+        }.setRegistryName(name);
+        ForgeRegistries.RECIPES.register(r);
+        CONDITIONAL.put(r, condition);
         return r;
     }
 }
