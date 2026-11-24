@@ -7,6 +7,7 @@
 - `LegacyChunkGenerator.structure(MapGenStructure, aliases...)`: mod structures (1.7 villageGenerator etc.) recorded per chunk, placed in populate, found by `/locate` and `findNearestStructure` (1.7 names as aliases).
 - `LegacyClassStructure` now also records the chest and spawner set-up of replayed 1.7 schematics (`getTileEntity` -> `generateChestContents(rand, Loot, te, n)` / `setEntityName("Mob")`) and hands them to a new `TileListener` after placing the blocks.
 - `client.texture.AngleSprite`: 1.7 custom-compass sprite (animated strip whose frame follows an angle, with the 1.7 needle damping).
+- `legacy.world.LegacyChunkedStructure`: one or more replayed `LegacyClassStructure`s at a fixed origin, pre-split per chunk and written straight into each chunk's `ChunkPrimer` during generation (no cascading loads) - for giant 1.7 schematics that the original placed from a single populate call.
 - `IArchaicRenderBlock.RENDER_LADDER` (1.7 render type 8): a double-sided plane 0.05 from the wall picked by the 1.7 meta 2..5 (signs, notes, ladders and other wall-hung flat blocks).
 
 ## 1.42.0
