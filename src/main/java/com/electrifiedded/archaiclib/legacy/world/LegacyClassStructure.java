@@ -40,12 +40,34 @@ public final class LegacyClassStructure {
     /** 1.7 World SRG names. */
     private static final String SET_BLOCK = "func_147449_b", SET_BLOCK_META = "func_147465_d", SET_AIR = "func_147468_f",
             SET_META = "func_72921_c", BLOCK_BY_ID = "func_149729_e";
+    private static final String GET_TE = "func_147438_o", FILL_CHEST = "func_76293_a", SPAWNER_LOGIC = "func_145881_a", SET_MOB = "func_98272_a";
     private static final String GENERATE = "func_76484_a", GEN_DESC = "(Lnet/minecraft/world/World;Ljava/util/Random;III)Z";
 
     /** Called for each placed block (e.g. to fill chests or set spawner mobs). */
     public interface PlaceListener {
         void placed(World world, BlockPos pos, IBlockState state);
     }
+
+    /** Chest / spawner set-up found in the original generate(): applied after all blocks by {@link #place(World, int, int, int, int, PlaceListener, TileListener)}. */
+    public interface TileListener {
+        /** {@code WeightedRandomChestContent.generateChestContents(rand, Owner.FIELD, te, n)}; lootField = "owner/Class.FIELD". */
+        default void chest(World world, BlockPos pos, String lootField) {}
+        /** {@code spawner.getSpawnerBaseLogic().setEntityName("Name")} (1.7 entity name). */
+        default void spawner(World world, BlockPos pos, String mob) {}
+    }
+
+    public static final class TileOp {
+        public final int bx, ox, by, oy, bz, oz;
+        public final String lootField, spawnerMob;
+        TileOp(Sym te, String loot, String mob) {
+            bx = te.teX.base; ox = te.teX.off; by = te.teY.base; oy = te.teY.off; bz = te.teZ.base; oz = te.teZ.off;
+            lootField = loot; spawnerMob = mob;
+        }
+    }
+
+    private final List<TileOp> tileOps = new ArrayList<>();
+
+    public List<TileOp> tileOps() { return Collections.unmodifiableList(tileOps); }
 
     /** One recorded op; base* = index of the generate() int parameter (0,1,2 = x,y,z) or -1 for an absolute value. */
     public static final class Op {
@@ -112,11 +134,27 @@ public final class LegacyClassStructure {
             ctx.run(m, params, 0);
             List<Op> list = new ArrayList<>(ctx.ops.size());
             for (Map.Entry<Long, Op> e : ctx.ops.entrySet()) list.add(e.getValue());
-            return new LegacyClassStructure(list, ctx.unresolved);
+            LegacyClassStructure r = new LegacyClassStructure(list, ctx.unresolved);
+            r.tileOps.addAll(ctx.tileOps.values());
+            return r;
         } catch (Throwable t) {
             LOG.error("Could not read legacy structure class", t);
             return new LegacyClassStructure(Collections.emptyList(), 0);
         }
+    }
+
+    /** Places all ops, then runs the recorded chest/spawner set-ups through {@code tiles}. */
+    public int place(World world, int x, int y, int z, int flags, PlaceListener listener, TileListener tiles) {
+        int n = place(world, x, y, z, flags, listener);
+        if (tiles != null) {
+            int[] base = {x, y, z};
+            for (TileOp t : tileOps) {
+                BlockPos p = new BlockPos((t.bx < 0 ? 0 : base[t.bx]) + t.ox, (t.by < 0 ? 0 : base[t.by]) + t.oy, (t.bz < 0 ? 0 : base[t.bz]) + t.oz);
+                if (t.lootField != null) tiles.chest(world, p, t.lootField);
+                if (t.spawnerMob != null) tiles.spawner(world, p, t.spawnerMob);
+            }
+        }
+        return n;
     }
 
     /** Places all ops relative to (x,y,z) (the original generate() arguments) with the given setBlockState flags. */
@@ -152,13 +190,19 @@ public final class LegacyClassStructure {
         final int size, base, off;
         final String field; // "owner.name" of a GETSTATIC
         final Block block;
+        Sym teX, teY, teZ; // world.getTileEntity(x, y, z) result (or its spawner logic)
+        boolean spawnerLogic;
+        String str; // LDC string
         Sym(int size, int base, int off, String field, Block block) { this.size = size; this.base = base; this.off = off; this.field = field; this.block = block; }
+        static Sym te(Sym x, Sym y, Sym z, boolean logic) { Sym s = new Sym(1, -3, 0, null, null); s.teX = x; s.teY = y; s.teZ = z; s.spawnerLogic = logic; return s; }
+        static Sym str(String v) { Sym s = new Sym(1, -4, 0, null, null); s.str = v; return s; }
         static Sym coord(int base, int off) { return new Sym(1, base, off, null, null); }
         static Sym cst(int v) { return new Sym(1, -1, v, null, null); }
         boolean isInt() { return base >= -1 && field == null && block == null; }
         @Override public int getSize() { return size; }
         @Override public boolean equals(Object o) {
-            return o instanceof Sym s && s.size == size && s.base == base && s.off == off && Objects.equals(s.field, field) && s.block == block;
+            return o instanceof Sym s && s.size == size && s.base == base && s.off == off && Objects.equals(s.field, field) && s.block == block
+                    && Objects.equals(s.teX, teX) && Objects.equals(s.teY, teY) && Objects.equals(s.teZ, teZ) && s.spawnerLogic == spawnerLogic && Objects.equals(s.str, str);
         }
         @Override public int hashCode() { return Objects.hash(size, base, off, field); }
     }
@@ -167,6 +211,7 @@ public final class LegacyClassStructure {
         final ClassNode cn;
         final BlockResolver resolver;
         final LinkedHashMap<Long, Op> ops = new LinkedHashMap<>();
+        final LinkedHashMap<Long, TileOp> tileOps = new LinkedHashMap<>();
         int unresolved;
         int callSerial;
 
@@ -224,6 +269,7 @@ public final class LegacyClassStructure {
                 case Opcodes.LDC: {
                     Object c = ((LdcInsnNode) insn).cst;
                     if (c instanceof Integer i) return Sym.cst(i);
+                    if (c instanceof String str) return Sym.str(str);
                     return (c instanceof Long || c instanceof Double) ? Sym.UNKNOWN2 : Sym.UNKNOWN;
                 }
                 case Opcodes.LCONST_0: case Opcodes.LCONST_1: case Opcodes.DCONST_0: case Opcodes.DCONST_1: return Sym.UNKNOWN2;
@@ -279,6 +325,29 @@ public final class LegacyClassStructure {
                 int argOff = insn.getOpcode() == Opcodes.INVOKESTATIC ? 0 : 1;
                 switch (mi.name) {
                     case SET_BLOCK, SET_BLOCK_META, SET_AIR, SET_META -> record(insn, mi, vals, argOff);
+                    case GET_TE -> {
+                        if (mi.desc.startsWith("(III") && vals.size() >= argOff + 3) {
+                            Sym x = vals.get(argOff), y = vals.get(argOff + 1), z = vals.get(argOff + 2);
+                            if (x.isInt() && y.isInt() && z.isInt()) return Sym.te(x, y, z, false);
+                        }
+                    }
+                    case SPAWNER_LOGIC -> {
+                        Sym t = vals.get(0);
+                        if (t != null && t.teX != null) return Sym.te(t.teX, t.teY, t.teZ, true);
+                    }
+                    case SET_MOB -> {
+                        Sym t = vals.get(0), name = vals.size() > 1 ? vals.get(1) : null;
+                        if (t != null && t.teX != null && t.spawnerLogic && name != null && name.str != null)
+                            ctx.tileOps.put(((long) serial << 32) | indexOf(insn), new TileOp(t, null, name.str));
+                    }
+                    case FILL_CHEST -> {
+                        // static generateChestContents(Random, WeightedRandomChestContent[], IInventory, int)
+                        if (vals.size() >= 3) {
+                            Sym loot = vals.get(1), t = vals.get(2);
+                            if (t != null && t.teX != null && loot != null && loot.field != null)
+                                ctx.tileOps.put(((long) serial << 32) | indexOf(insn), new TileOp(t, loot.field, null));
+                        }
+                    }
                     case BLOCK_BY_ID -> {
                         Sym id = vals.get(0);
                         if (id.isInt() && id.base == -1) return new Sym(1, -2, 0, null, Block.getBlockById(id.off));

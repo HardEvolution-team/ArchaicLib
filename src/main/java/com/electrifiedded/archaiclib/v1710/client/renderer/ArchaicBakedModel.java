@@ -269,6 +269,21 @@ public class ArchaicBakedModel implements IBakedModel {
             return q;
         }
 
+        if (type == IArchaicRenderBlock.RENDER_LADDER) {
+            TextureAtlasSprite s = sprite(safeIcon(2, key));
+            if (s == null) return null;
+            q.particle = s;
+            q.ao = false;
+            switch (key) {
+                case 2 -> plane(q, new Vector3f(0, 0, 15.2F), new Vector3f(16, 16, 15.2F), EnumFacing.NORTH, EnumFacing.SOUTH, s, rot, null, tint);
+                case 3 -> plane(q, new Vector3f(0, 0, 0.8F), new Vector3f(16, 16, 0.8F), EnumFacing.SOUTH, EnumFacing.NORTH, s, rot, null, tint);
+                case 4 -> plane(q, new Vector3f(15.2F, 0, 0), new Vector3f(15.2F, 16, 16), EnumFacing.WEST, EnumFacing.EAST, s, rot, null, tint);
+                case 5 -> plane(q, new Vector3f(0.8F, 0, 0), new Vector3f(0.8F, 16, 16), EnumFacing.EAST, EnumFacing.WEST, s, rot, null, tint);
+                default -> plane(q, new Vector3f(0, 0, 8), new Vector3f(16, 16, 8), EnumFacing.SOUTH, EnumFacing.NORTH, s, rot, null, tint);
+            }
+            return q;
+        }
+
         AxisAlignedBB bb = block.getArchaicRenderBounds(key);
         float x1 = (float)bb.minX * 16, y1 = (float)bb.minY * 16, z1 = (float)bb.minZ * 16;
         float x2 = (float)bb.maxX * 16, y2 = (float)bb.maxY * 16, z2 = (float)bb.maxZ * 16;

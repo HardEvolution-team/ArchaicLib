@@ -15,6 +15,8 @@ public interface IArchaicRenderBlock {
     int RENDER_STANDARD = 0;
     int RENDER_CROSS = 1;
     int RENDER_CROPS = 6;
+    /** 1.7 render type 8 (ladder): one double-sided plane 0.05 from the wall; the render key is the 1.7 meta 2..5 (wall at +Z/-Z/+X/-X), anything else = centred plane (items). */
+    int RENDER_LADDER = 8;
 
     @SideOnly(Side.CLIENT)
     default void registerBlockIcons(IIconRegister reg) {

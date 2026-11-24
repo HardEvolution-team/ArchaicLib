@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.43.0
+### Added
+- `legacy.world.LegacyStructureComponent`: the 1.7 `StructureComponent` API (int `coordBaseMode`, Block+meta placement without 1.12 rotation, `fillWithBlocks`/`fillWithMetadataBlocks`/`fillWithRandomizedBlocks`, the 1.7 `getMetadataWithOffset`, `BlockSelector`, chest/door helpers) so decompiled 1.7 villages/strongholds port line by line.
+- `legacy.world.LegacyChestContent`: 1.7 `WeightedRandomChestContent` + its chest fill algorithm.
+- `LegacyChunkGenerator.structure(MapGenStructure, aliases...)`: mod structures (1.7 villageGenerator etc.) recorded per chunk, placed in populate, found by `/locate` and `findNearestStructure` (1.7 names as aliases).
+- `LegacyClassStructure` now also records the chest and spawner set-up of replayed 1.7 schematics (`getTileEntity` -> `generateChestContents(rand, Loot, te, n)` / `setEntityName("Mob")`) and hands them to a new `TileListener` after placing the blocks.
+- `client.texture.AngleSprite`: 1.7 custom-compass sprite (animated strip whose frame follows an angle, with the 1.7 needle damping).
+- `IArchaicRenderBlock.RENDER_LADDER` (1.7 render type 8): a double-sided plane 0.05 from the wall picked by the 1.7 meta 2..5 (signs, notes, ladders and other wall-hung flat blocks).
+
 ## 1.42.0
 ### Added
 - `original.OriginalDownloader`: ARR ports no longer need the player to hunt for the original mod file. Every port ships `archaic_originals.json` (file name, SHA-256, size, original page, download mirrors - CurseForge CDN first, then the authors' official pages/GitHub/MCArchive/Wayback copies of the official site). At start-up ArchaicLib downloads missing files into `archaic_originals/`, checks size + SHA-256, and tries the next mirror on failure.
