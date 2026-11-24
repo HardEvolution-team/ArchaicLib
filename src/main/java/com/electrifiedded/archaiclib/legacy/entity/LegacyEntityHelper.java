@@ -140,4 +140,20 @@ public final class LegacyEntityHelper {
     public static boolean isCreative(Entity e) {
         return e instanceof EntityPlayer && ((EntityPlayer) e).capabilities.isCreativeMode;
     }
+
+    /**
+     * 1.7 {@code target.copyDataFrom(source, true)} (func_82141_a): copies the saved data of {@code source} (equipment,
+     * name, effects, attributes...) into {@code target}, keeping the target's own UUID and position.
+     */
+    public static void copyDataFrom(Entity target, Entity source) {
+        net.minecraft.nbt.NBTTagCompound tag = source.writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+        tag.removeTag("UUIDMost");
+        tag.removeTag("UUIDLeast");
+        tag.removeTag("Pos");
+        tag.removeTag("Motion");
+        tag.removeTag("Passengers");
+        double x = target.posX, y = target.posY, z = target.posZ;
+        target.readFromNBT(tag);
+        target.setPosition(x, y, z);
+    }
 }

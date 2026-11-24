@@ -13,6 +13,19 @@ import net.minecraft.util.math.MathHelper;
 public final class LegacyArrows {
     private LegacyArrows() {}
 
+    /**
+     * 1.7 {@code new EntityArrow(world, shooter, velocity)} (bow shot along the shooter's look; the 1.7 ctor scaled
+     * velocity by 1.5 with inaccuracy 1). Not spawned. 1.7 {@code canBePickedUp = 2} = {@code PickupStatus.CREATIVE_ONLY}.
+     */
+    public static EntityArrow shot(net.minecraft.world.World world, EntityLivingBase shooter, float velocity) {
+        EntityTippedArrow arrow = new EntityTippedArrow(world, shooter);
+        arrow.shoot(shooter, shooter.rotationPitch, shooter.rotationYaw, 0.0F, velocity * 1.5F, 1.0F);
+        if (shooter instanceof net.minecraft.entity.player.EntityPlayer) {
+            arrow.pickupStatus = EntityArrow.PickupStatus.ALLOWED;
+        }
+        return arrow;
+    }
+
     public static EntityArrow aimed(EntityLivingBase shooter, EntityLivingBase target, float velocity, float inaccuracy) {
         EntityTippedArrow arrow = new EntityTippedArrow(shooter.world, shooter);
         arrow.posY = shooter.posY + shooter.getEyeHeight() - 0.1;

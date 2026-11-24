@@ -19,7 +19,13 @@ public class ExampleMod {
     @Mod.EventHandler
     public void construct(FMLConstructionEvent event) {
         com.electrifiedded.archaiclib.original.OriginalModAssets.setGameDir(net.minecraftforge.fml.common.Loader.instance().getConfigDir().getParentFile());
+        com.electrifiedded.archaiclib.original.OriginalDownloader.run(net.minecraftforge.fml.common.Loader.instance().getConfigDir().getParentFile());
         proxy.construct();
+    }
+
+    @Mod.EventHandler
+    public void loadComplete(net.minecraftforge.fml.common.event.FMLLoadCompleteEvent event) {
+        com.electrifiedded.archaiclib.original.OriginalDownloader.loadingFinished();
     }
 
     @Mod.EventHandler

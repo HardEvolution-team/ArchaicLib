@@ -51,8 +51,15 @@ public class ArchaicModelLoader implements ICustomModelLoader {
             }
             ResourceLocation texture = ArchaicItem.TEXTURES.get(itemName);
             if (texture != null) {
-                return ModelLoaderRegistry.getModel(ITEM_GENERATED)
-                        .retexture(ImmutableMap.of("layer0", texture.toString()));
+                java.util.List<ResourceLocation> extra = ArchaicItem.EXTRA_LAYERS.get(itemName);
+                if (extra == null) {
+                    return ModelLoaderRegistry.getModel(ITEM_GENERATED)
+                            .retexture(ImmutableMap.of("layer0", texture.toString()));
+                }
+                ImmutableMap.Builder<String, String> layers = ImmutableMap.builder();
+                layers.put("layer0", texture.toString());
+                for (int i = 0; i < extra.size(); i++) layers.put("layer" + (i + 1), extra.get(i).toString());
+                return ModelLoaderRegistry.getModel(ITEM_GENERATED).retexture(layers.build());
             }
         }
         IArchaicRenderBlock block = blockFor(modelLocation);

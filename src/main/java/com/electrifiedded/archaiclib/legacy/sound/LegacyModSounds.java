@@ -32,8 +32,12 @@ public final class LegacyModSounds {
         if (BY_MOD.containsKey(domain)) return BY_MOD.get(domain);
         Map<String, SoundEvent> events = new LinkedHashMap<>();
         String path = "/assets/" + domain + "/sounds.json";
-        try (InputStream in = LegacyModSounds.class.getResourceAsStream(path)) {
-            if (in == null) throw new IllegalStateException("LegacyModSounds: missing " + path);
+        try (InputStream in = open(modid, domain, path)) {
+            if (in == null) {
+                com.electrifiedded.archaiclib.ExampleMod.LOGGER.warn("LegacyModSounds: {} not found (port jar or archaic_originals) - mod {} will have no sounds", path, modid);
+                BY_MOD.put(domain, events);
+                return events;
+            }
             JsonObject root = new JsonParser().parse(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
             for (Entry<String, ?> e : root.entrySet()) {
                 ResourceLocation rl = new ResourceLocation(domain, e.getKey());
@@ -47,6 +51,20 @@ public final class LegacyModSounds {
         BY_MOD.put(domain, events);
         MinecraftForge.EVENT_BUS.register(new Registrar(events));
         return events;
+    }
+
+    /** sounds.json from the classpath, else from the original jar in archaic_originals (port jars ship no original assets). */
+    private static InputStream open(String modid, String domain, String path) {
+        InputStream in = LegacyModSounds.class.getResourceAsStream(path);
+        if (in != null) return in;
+        String rel = path.substring(1);
+        byte[] b = com.electrifiedded.archaiclib.original.OriginalModAssets.readOriginal(modid, rel);
+        if (b == null && !modid.equals(domain)) b = com.electrifiedded.archaiclib.original.OriginalModAssets.readOriginal(domain, rel);
+        if (b == null) {
+            String od = com.electrifiedded.archaiclib.original.OriginalModAssets.originalDomainOf(domain);
+            if (od != null && !od.equals(domain)) b = com.electrifiedded.archaiclib.original.OriginalModAssets.readOriginal(modid, "assets/" + od + "/sounds.json");
+        }
+        return b == null ? null : new java.io.ByteArrayInputStream(b);
     }
 
     /** Resolve "Domain:key" (any case) or a bare key in the given mod domain; falls back to {@link LegacySounds#get}. */

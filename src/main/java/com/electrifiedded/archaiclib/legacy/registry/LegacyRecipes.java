@@ -26,6 +26,7 @@ public final class LegacyRecipes {
     }
 
     public static IRecipe addRecipe(ItemStack output, Object... params) {
+        params = sanitizeShaped(params);
         ResourceLocation name = nextName(output);
         IRecipe r = new ShapedOreRecipe(name, output, params).setRegistryName(name);
         ForgeRegistries.RECIPES.register(r);
@@ -44,6 +45,7 @@ public final class LegacyRecipes {
      * runtime from config or per-world settings (1.12 recipes are registered once).
      */
     public static IRecipe addConditionalRecipe(java.util.function.BooleanSupplier condition, ItemStack output, Object... params) {
+        params = sanitizeShaped(params);
         ResourceLocation name = nextName(output);
         IRecipe r = new ShapedOreRecipe(name, output, params) {
             @Override
@@ -78,5 +80,46 @@ public final class LegacyRecipes {
         ForgeRegistries.RECIPES.register(r);
         CONDITIONAL.put(r, condition);
         return r;
+    }
+
+    /**
+     * 1.7 {@code GameRegistry.addShapedRecipe} tolerated sloppy recipes that 1.12 rejects with an exception:
+     * a pattern char without a key (it matched an empty slot), keys that the pattern never uses, and null key values.
+     * Returns params where undefined chars are spaces and unused/null keys are dropped; well-formed input is unchanged.
+     */
+    public static Object[] sanitizeShaped(Object[] params) {
+        if (params.length == 1 && params[0] instanceof Object[]) params = (Object[]) params[0];
+        java.util.List<String> rows = new java.util.ArrayList<>();
+        int i = 0;
+        boolean mirrored = false;
+        if (i < params.length && params[i] instanceof Boolean) { mirrored = (Boolean) params[i]; i++; }
+        if (i < params.length && params[i] instanceof String[]) {
+            for (String r : (String[]) params[i]) rows.add(r);
+            i++;
+        } else {
+            while (i < params.length && params[i] instanceof String) rows.add((String) params[i++]);
+        }
+        java.util.LinkedHashMap<Character, Object> keys = new java.util.LinkedHashMap<>();
+        for (; i + 1 < params.length; i += 2) {
+            if (params[i] instanceof Character && params[i + 1] != null) keys.put((Character) params[i], params[i + 1]);
+        }
+        java.util.Set<Character> used = new java.util.HashSet<>();
+        java.util.List<String> fixed = new java.util.ArrayList<>();
+        for (String r : rows) {
+            StringBuilder b = new StringBuilder();
+            for (char c : r.toCharArray()) {
+                if (c != ' ' && !keys.containsKey(c)) c = ' ';
+                if (c != ' ') used.add(c);
+                b.append(c);
+            }
+            fixed.add(b.toString());
+        }
+        java.util.List<Object> out = new java.util.ArrayList<>();
+        if (mirrored) out.add(Boolean.TRUE);
+        out.addAll(fixed);
+        for (java.util.Map.Entry<Character, Object> e : keys.entrySet()) {
+            if (used.contains(e.getKey())) { out.add(e.getKey()); out.add(e.getValue()); }
+        }
+        return out.toArray();
     }
 }

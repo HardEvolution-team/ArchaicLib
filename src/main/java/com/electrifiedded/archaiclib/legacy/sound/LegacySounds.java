@@ -154,8 +154,14 @@ public final class LegacySounds {
     public static SoundEvent get(String name) {
         SoundEvent e = LEGACY.get(name);
         if (e != null) return e;
-        return SoundEvent.REGISTRY.getObject(new ResourceLocation(name));
+        e = RESOLVED.get(name);
+        if (e != null) return e;
+        e = SoundEvent.REGISTRY.getObject(new ResourceLocation(name));
+        if (e != null) RESOLVED.put(name, e); // misses not cached: the sound may be registered later
+        return e;
     }
+
+    private static final java.util.concurrent.ConcurrentHashMap<String, SoundEvent> RESOLVED = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static void playSoundEffect(World world, double x, double y, double z, String name, float volume, float pitch) {
         SoundEvent e = get(name);

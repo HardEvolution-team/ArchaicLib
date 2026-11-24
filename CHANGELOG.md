@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.42.0
+### Added
+- `original.OriginalDownloader`: ARR ports no longer need the player to hunt for the original mod file. Every port ships `archaic_originals.json` (file name, SHA-256, size, original page, download mirrors - CurseForge CDN first, then the authors' official pages/GitHub/MCArchive/Wayback copies of the official site). At start-up ArchaicLib downloads missing files into `archaic_originals/`, checks size + SHA-256, and tries the next mirror on failure.
+- A mirror may serve a zip: the manifest's `inner` names the file to extract from it.
+- `alternatives` in a manifest entry: another acceptable build (own hash/mirrors) tried when all mirrors of the main file fail.
+- Mirrors may be `scrape:<page> <regex>`: the page is opened and the current download link (sites with expiring links) is taken from it; the SHA-256 check still decides.
+- Short stall timeout (`stallTimeoutSeconds`, default 5): a dead link is skipped after 5 s of silence, a slow but steady download is never cut off.
+- Loading-screen progress bar while downloading (file name and MB done / total).
+- Per-mod editable sources: the manifest is copied to `config/archaiclib/originals/<port>.json`; edit links there (set `"locked": true` to keep your edits across updates). `config/archaiclib/originals.cfg`: `autoDownload` (default true), `stallTimeoutSeconds`.
+- Main-menu banner when something could not be downloaded; click it for the list with "Download" links, "Open folder" and "Retry download". One chat message with clickable links after joining a world.
+### Changed
+- The missing-originals screen no longer pops up by itself on the main menu; it opens from the banner.
+
+## 1.41.0
+### Added
+- `legacy.world.LegacyChestGenHooks`: 1.7 ChestGenHooks.addItem categories (dungeonChest, pyramidJungleChest, ...) on 1.12 loot tables, plus `fillChest` for 1.7 generateChestContents in world gen.
+- `LegacyArrows.shot(world, shooter, velocity)`: 1.7 `new EntityArrow(world, shooter, velocity)` bow shot.
+
+## 1.40.1
+### Fixed
+- `LegacyModSounds.autoRegister` crashed ("missing /assets/<modid>/sounds.json") for ports that ship no original assets: sounds.json is now read from the original jar in `archaic_originals`; if it is nowhere, a warning is logged instead of crashing.
+
+## 1.40.0
+### Added
+- `util.FastRandom`: drop-in `java.util.Random` (SplitMix64, no atomic CAS per call) + `FastRandom.shared()` per-thread instance; ported mods use it in place of `new Random()`.
+- `LegacyWorld.rpos(x,y,z)`: per-thread reusable read-only position.
+### Changed (performance)
+- `LegacyBlockIds.state(block, meta)` caches the 16 meta states per block (no getStateFromMeta/try-catch per setBlock).
+- `LegacyWorld.getBlock/getBlockMetadata/isAirBlock/blockExists` and `LegacyBlockIds.getBlock/getMeta` no longer allocate a BlockPos.
+- `LegacyWorld.setBlock` rejects y outside 0..255 before allocating; `LegacyBlockIds.setBlock` routes through it.
+- `LegacySounds.get` caches registry lookups of non-legacy sound names.
+
+## 1.39.1
+### Changed
+- Staged sapling/grass growth runs the real vanilla generators (`ChunkStagedGen.deferOp`) instead of a simplified copy.
+
+## 1.39.0
+### Added
+- `ChunkStagedGen.registerOp/deferOp`: persistent deferred real-world operations (vanilla generators) run as soon as their whole area is loaded and has its staged blocks; never load a chunk.
+- `world.StagedWorld`: drop-in `LegacyWorld` facade for old structure generators; inside a `ChunkStagedGen` job all reads/writes (blocks, tile entities, height, top solid block, sky, biome, freeze); sapling/grass growth uses the real vanilla generators via `deferOp` go to the staged session, outside it behaves like `LegacyWorld`.
+- `ChunkStagedGen.spawnEntity`: structure entities are spawned only when their chunk really exists (stored as NBT with the chunk's pending blocks and spawned right after them); never loads a chunk.
+
+## 1.38.0
+### Added
+- `client.skin.LegacyPlayerSkins`: skin of any account by player name (Mojang profile service + vanilla SkinManager, 64x64/slim, cached; default Steve/Alex while loading/offline) - replacement for the dead skins.minecraft.net / s3 MinecraftSkins downloads; `isModernLayout(texture)` (64x64 vs 64x32 skin).
+- `world.DeferredWorldGen`: run old populate-time structure code at the end of the server tick (no cascading worldgen).
+- `LegacyWorld`: getHeightValue, getTopBlock, getTopSolidOrLiquidBlock, canBlockSeeTheSky, canBlockFreeze, doesBlockHaveSolidTopSurface, growSapling, grow, newPainting (1.7 direction).
+- `LegacyEntityHelper.copyDataFrom` (1.7 Entity.copyDataFrom).
+- `ArchaicItem.registerMetaTextureLayers`: multi-layer generated item models (1.7 multi render pass items, spawn eggs).
+### Fixed
+- `LegacyRecipes.addRecipe`: 1.7-style sloppy shaped recipes (undefined pattern chars = empty slot, unused/null keys) no longer crash on 1.12.
+
 ## 1.37.0
 ### Added
 - `OriginalModAssets.mapDomain(portDomain, originalDomain)`: serve an original jar domain under the port's own modid (the original domain is no longer exposed, so it cannot clash with the real mod).

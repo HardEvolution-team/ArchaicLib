@@ -28,25 +28,40 @@ public final class LegacyBlockIds {
     @SuppressWarnings("deprecation")
     public static IBlockState state(Block b, int meta) {
         if (b == null) return Blocks.AIR.getDefaultState();
-        try {
-            return b.getStateFromMeta(meta & 15);
-        } catch (RuntimeException e) {
-            return b.getDefaultState();
+        meta &= 15;
+        IBlockState[] arr = STATE_CACHE.get(b);
+        if (arr == null) {
+            arr = new IBlockState[16];
+            IBlockState[] prev = STATE_CACHE.putIfAbsent(b, arr);
+            if (prev != null) arr = prev;
         }
+        IBlockState st = arr[meta];
+        if (st == null) {
+            try {
+                st = b.getStateFromMeta(meta);
+            } catch (RuntimeException e) {
+                st = b.getDefaultState();
+            }
+            arr[meta] = st;
+        }
+        return st;
     }
 
+    /** Block -> 16 meta states, filled lazily (getStateFromMeta is pure; races only recompute). */
+    private static final java.util.concurrent.ConcurrentHashMap<Block, IBlockState[]> STATE_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static Block getBlock(World world, int x, int y, int z) {
-        return world.getBlockState(new BlockPos(x, y, z)).getBlock();
+        return world.getBlockState(LegacyWorld.rpos(x, y, z)).getBlock();
     }
 
     public static int getMeta(World world, int x, int y, int z) {
-        IBlockState s = world.getBlockState(new BlockPos(x, y, z));
+        IBlockState s = world.getBlockState(LegacyWorld.rpos(x, y, z));
         return s.getBlock().getMetaFromState(s);
     }
 
     /** 1.7 {@code world.setBlock(x, y, z, block, meta, flags)}. */
     public static boolean setBlock(World world, int x, int y, int z, Block block, int meta, int flags) {
-        return world.setBlockState(new BlockPos(x, y, z), state(block, meta), flags);
+        return LegacyWorld.setBlock(world, x, y, z, block, meta, flags);
     }
 
     public static boolean setBlock(World world, int x, int y, int z, Block block) {

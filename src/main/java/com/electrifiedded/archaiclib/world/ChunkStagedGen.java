@@ -115,6 +115,107 @@ public final class ChunkStagedGen {
         else r.run();
     }
 
+    /**
+     * Spawns an entity that belongs to a staged structure. Inside a job it is deferred to {@link #onMain}. On the
+     * server thread it spawns now if its chunk is loaded and populated, otherwise the entity is saved (NBT) with the
+     * chunk's stored blocks and spawned right after they are written. Never loads or generates a chunk.
+     */
+    public static void spawnEntity(World world, net.minecraft.entity.Entity e) {
+        if (e == null) return;
+        if (current() != null) { onMain(() -> spawnEntity(world, e)); return; }
+        if (!(world instanceof WorldServer)) { world.spawnEntity(e); return; }
+        WorldServer ws = (WorldServer) world;
+        int cx = net.minecraft.util.math.MathHelper.floor(e.posX) >> 4, cz = net.minecraft.util.math.MathHelper.floor(e.posZ) >> 4;
+        Chunk c = ws.getChunkProvider().getLoadedChunk(cx, cz);
+        Data d = Data.get(ws);
+        long key = ChunkPos.asLong(cx, cz);
+        if (c != null && c.isTerrainPopulated() && !d.blocks.containsKey(key)) { ws.spawnEntity(e); return; }
+        NBTTagCompound nbt = new NBTTagCompound();
+        if (!e.writeToNBTOptional(nbt)) return;
+        d.entities.computeIfAbsent(key, k -> new NBTTagList()).appendTag(nbt);
+        d.markDirty();
+        if (c != null && c.isTerrainPopulated()) mainTasks.add(() -> {
+            Chunk now = ws.getChunkProvider().getLoadedChunk(cx, cz);
+            if (now != null) applyStored(ws, now, true);
+        });
+    }
+
+    /** A world operation that must run on the real world (vanilla tree/grass generators etc.). */
+    public interface WorldOp { void run(WorldServer world, BlockPos pos, Random rand); }
+
+    private static final Map<String, WorldOp> OPS = new ConcurrentHashMap<>();
+
+    /** Registers a persistent deferred operation type (call during init, same id on every start). */
+    public static void registerOp(String id, WorldOp op) { OPS.put(id, op); }
+
+    /**
+     * Runs {@code op} at {@code pos} on the real world as soon as every chunk within {@code radius} blocks is loaded
+     * and has received its staged blocks (inside a job: queued with the job's blocks). Never loads a chunk; saved
+     * with the world until it can run. Outside a job with the area ready it runs right away.
+     */
+    public static void deferOp(World world, String id, BlockPos pos, int radius, long seed) {
+        Session s = current();
+        if (s != null) { s.ops.add(new PendingOp(id, pos.toImmutable(), radius, seed)); return; }
+        if (!(world instanceof WorldServer)) return;
+        addOp((WorldServer) world, new PendingOp(id, pos.toImmutable(), radius, seed));
+    }
+
+    static final class PendingOp {
+        final String id; final BlockPos pos; final int radius; final long seed;
+        PendingOp(String id, BlockPos pos, int radius, long seed) { this.id = id; this.pos = pos; this.radius = radius; this.seed = seed; }
+        NBTTagCompound write() {
+            NBTTagCompound n = new NBTTagCompound();
+            n.setString("i", id); n.setLong("p", pos.toLong()); n.setInteger("r", radius); n.setLong("s", seed);
+            return n;
+        }
+        static PendingOp read(NBTTagCompound n) {
+            return new PendingOp(n.getString("i"), BlockPos.fromLong(n.getLong("p")), n.getInteger("r"), n.getLong("s"));
+        }
+    }
+
+    private static void addOp(WorldServer w, PendingOp op) {
+        Data d = Data.get(w);
+        long key = ChunkPos.asLong(op.pos.getX() >> 4, op.pos.getZ() >> 4);
+        d.ops.computeIfAbsent(key, k -> new NBTTagList()).appendTag(op.write());
+        d.markDirty();
+        mainTasks.add(() -> tryOps(w, op.pos.getX() >> 4, op.pos.getZ() >> 4));
+    }
+
+    /** Chunk ready for an op: loaded (no load is triggered) and without pending staged blocks. */
+    private static boolean ready(WorldServer w, Data d, int cx, int cz) {
+        return w.getChunkProvider().getLoadedChunk(cx, cz) != null && !d.blocks.containsKey(ChunkPos.asLong(cx, cz))
+            && !d.tiles.containsKey(ChunkPos.asLong(cx, cz));
+    }
+
+    /** Runs every stored op near chunk (cx, cz) whose whole area is ready. */
+    private static void tryOps(WorldServer w, int cx, int cz) {
+        Data d = Data.get(w);
+        if (d.ops.isEmpty()) return;
+        for (int ox = -2; ox <= 2; ox++) for (int oz = -2; oz <= 2; oz++) {
+            long key = ChunkPos.asLong(cx + ox, cz + oz);
+            NBTTagList list = d.ops.get(key);
+            if (list == null) continue;
+            NBTTagList keep = new NBTTagList();
+            List<PendingOp> run = new ArrayList<>();
+            for (int i = 0; i < list.tagCount(); i++) {
+                PendingOp op = PendingOp.read(list.getCompoundTagAt(i));
+                boolean ok = true;
+                int x0 = (op.pos.getX() - op.radius) >> 4, x1 = (op.pos.getX() + op.radius) >> 4;
+                int z0 = (op.pos.getZ() - op.radius) >> 4, z1 = (op.pos.getZ() + op.radius) >> 4;
+                for (int x = x0; x <= x1 && ok; x++) for (int z = z0; z <= z1 && ok; z++) ok = ready(w, d, x, z);
+                if (ok) run.add(op); else keep.appendTag(list.getCompoundTagAt(i));
+            }
+            if (run.isEmpty()) continue;
+            if (keep.tagCount() == 0) d.ops.remove(key); else d.ops.put(key, keep);
+            d.markDirty();
+            for (PendingOp op : run) {
+                WorldOp f = OPS.get(op.id);
+                if (f == null) continue;
+                try { f.run(w, op.pos, new Random(op.seed)); } catch (Throwable t) { t.printStackTrace(); }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ session (worker thread)
 
     private static final class Cancelled extends RuntimeException {
@@ -129,6 +230,7 @@ public final class ChunkStagedGen {
         private final Map<Long, Map<Integer, IBlockState>> writes = new LinkedHashMap<>();
         private final Map<BlockPos, TileEntity> tiles = new HashMap<>();
         private final List<Runnable> after = new ArrayList<>();
+        private final List<PendingOp> ops = new ArrayList<>();
 
         Session(WorldServer w, int gen) { this.world = w; this.gen = gen; }
 
@@ -251,6 +353,7 @@ public final class ChunkStagedGen {
                     data.add(key, packed, teList);
                 }
             }
+            for (PendingOp op : ops) addOp(world, op);
             if (!after.isEmpty()) {
                 List<Runnable> a = new ArrayList<>(after);
                 liveApply.add(new LiveApply(a));
@@ -365,6 +468,7 @@ public final class ChunkStagedGen {
             if (a.index >= a.packed.length) {
                 liveApply.poll();
                 applyTiles(a.world, a.tiles);
+                tryOps(a.world, a.cx, a.cz);
             }
         }
     }
@@ -374,6 +478,8 @@ public final class ChunkStagedGen {
     public static final class Data extends WorldSavedData {
         final Map<Long, List<int[]>> blocks = new HashMap<>();
         final Map<Long, NBTTagList> tiles = new HashMap<>();
+        final Map<Long, NBTTagList> entities = new HashMap<>();
+        final Map<Long, NBTTagList> ops = new HashMap<>();
 
         public Data(String name) { super(name); }
 
@@ -395,7 +501,7 @@ public final class ChunkStagedGen {
             markDirty();
         }
 
-        boolean has(long key) { return blocks.containsKey(key) || tiles.containsKey(key); }
+        boolean has(long key) { return blocks.containsKey(key) || tiles.containsKey(key) || entities.containsKey(key); }
 
         @Override
         public void readFromNBT(NBTTagCompound nbt) {
@@ -408,6 +514,8 @@ public final class ChunkStagedGen {
                 for (int j = 0; j < parts.tagCount(); j++) l.add(((NBTTagIntArray) parts.get(j)).getIntArray());
                 if (!l.isEmpty()) blocks.put(key, l);
                 if (c.hasKey("t")) tiles.put(key, c.getTagList("t", 10));
+                if (c.hasKey("n")) entities.put(key, c.getTagList("n", 10));
+                if (c.hasKey("o")) ops.put(key, c.getTagList("o", 10));
             }
         }
 
@@ -416,6 +524,8 @@ public final class ChunkStagedGen {
             NBTTagList list = new NBTTagList();
             Set<Long> keys = new HashSet<>(blocks.keySet());
             keys.addAll(tiles.keySet());
+            keys.addAll(entities.keySet());
+            keys.addAll(ops.keySet());
             for (long key : keys) {
                 NBTTagCompound c = new NBTTagCompound();
                 c.setLong("k", key);
@@ -423,6 +533,8 @@ public final class ChunkStagedGen {
                 for (int[] a : blocks.getOrDefault(key, Collections.emptyList())) parts.appendTag(new NBTTagIntArray(a));
                 c.setTag("b", parts);
                 if (tiles.containsKey(key)) c.setTag("t", tiles.get(key));
+                if (entities.containsKey(key)) c.setTag("n", entities.get(key));
+                if (ops.containsKey(key)) c.setTag("o", ops.get(key));
                 list.appendTag(c);
             }
             nbt.setTag("c", list);
@@ -437,9 +549,15 @@ public final class ChunkStagedGen {
         if (!d.has(key)) return;
         List<int[]> parts = d.blocks.remove(key);
         NBTTagList tl = d.tiles.remove(key);
+        NBTTagList el = d.entities.remove(key);
         d.markDirty();
         if (parts != null) for (int[] p : parts) applyBlocks(w, c, p, 0, Integer.MAX_VALUE, sync);
         applyTiles(w, tl);
+        if (el != null) for (int i = 0; i < el.tagCount(); i++) {
+            try { net.minecraft.world.chunk.storage.AnvilChunkLoader.readWorldEntity(el.getCompoundTagAt(i), w, true); }
+            catch (Throwable t) { t.printStackTrace(); }
+        }
+        tryOps(w, c.x, c.z);
     }
 
     public static final class Handler implements IWorldGenerator {
@@ -448,6 +566,7 @@ public final class ChunkStagedGen {
             if (world instanceof WorldServer) {
                 Chunk c = ((WorldServer) world).getChunkProvider().getLoadedChunk(chunkX, chunkZ);
                 if (c != null) applyStored((WorldServer) world, c, false);
+                tryOps((WorldServer) world, chunkX, chunkZ);
             }
         }
 
@@ -462,7 +581,11 @@ public final class ChunkStagedGen {
             if (!(w instanceof WorldServer) || !e.getChunk().isTerrainPopulated()) return;
             Chunk c = e.getChunk();
             WorldServer ws = (WorldServer) w;
-            if (!Data.get(ws).has(ChunkPos.asLong(c.x, c.z))) return;
+            Data d = Data.get(ws);
+            if (!d.has(ChunkPos.asLong(c.x, c.z))) {
+                if (!d.ops.isEmpty()) mainTasks.add(() -> tryOps(ws, c.x, c.z));
+                return;
+            }
             mainTasks.add(() -> {
                 Chunk now = ws.getChunkProvider().getLoadedChunk(c.x, c.z);
                 if (now != null) applyStored(ws, now, true);
