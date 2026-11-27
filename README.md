@@ -71,7 +71,7 @@ Run the client or server through the Gradle run tasks. Use `genSources` if you n
 
 ## License
 
-All rights reserved. The source is publicly visible, but it may not be copied, modified, redistributed or reused without the author's written permission. See [LICENSE](LICENSE).
+Licensed under the HardEvolution Restricted Source-Available License (HE-RSAL) v1.1. See [LICENSE.ru.md](LICENSE.ru.md) (prevailing) / [LICENSE.en.md](LICENSE.en.md).
 
 ## Links
 
