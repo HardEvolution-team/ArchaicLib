@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.47.0
+### Added
+- `jei.ArchaicJei.registerInfoCategory`: JEI/HEI info pages (InfoEntry/Layer) - structure pattern layers (cycled, hover tooltips), rotating entity preview, auto-counted materials, extra item slots and wrapped description text. For mobs built from blocks, shrines, NPC jobs.
+
+## 1.46.1
+### Fixed
+- `LegacyChunkGenerator`: crash (ConcurrentModificationException in StructureStart.generateStructure) when entering a legacy dimension with structures (e.g. Shadow World): re-entrant populate calls from cascading chunk loads are now deferred until the outer structure pass finishes.
+
+## 1.46.0
+### Added
+- `world.ParallelRays`: runs an old explosion's ray-cast slices on all cores (read-only phase; slices touching unloaded chunks are replayed on the server thread, result identical).
+- `BlockPosSet` accepts adds from worker threads (per-thread shards) and skips consecutive duplicate ray steps.
+
+## 1.45.0
+### Added
+- `util.BlockPosSet`: long-keyed `Set<BlockPos>` (1.12 BlockPos.hashCode collides badly; big blasts spent seconds in HashSet.add).
+- `BlastBatch.packetSample(list)`: caps the block list sent in `SPacketExplosion` (client froze breaking 100k+ blocks with particles).
+
+## 1.44.1
+### Changed
+- `BlastBatch` resends touched chunks once at the end of the server tick (TNT chains no longer resend the same chunks per blast).
+### Added
+- `BlastBatch.rayGrid(configured, power, stepScale)`: caps an old explosion's ray grid to what its radius needs.
+
+## 1.44.0
+### Added
+- `world.BlastBatch`: open/close around a mass block edit (old copy-pasted explosions) - setBlockState writes straight into chunks without per-block lighting, neighbour cascades or block packets; on close one border neighbour pass, lazy relight and whole-chunk resend. Backed by a `World.setBlockState` mixin.
+
 ## 1.43.0
 ### Added
 - `legacy.world.LegacyStructureComponent`: the 1.7 `StructureComponent` API (int `coordBaseMode`, Block+meta placement without 1.12 rotation, `fillWithBlocks`/`fillWithMetadataBlocks`/`fillWithRandomizedBlocks`, the 1.7 `getMetadataWithOffset`, `BlockSelector`, chest/door helpers) so decompiled 1.7 villages/strongholds port line by line.

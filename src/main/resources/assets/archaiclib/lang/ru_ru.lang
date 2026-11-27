@@ -16,3 +16,5 @@ archaiclib.originals.retry_none=Нечего повторять - скачай �
 archaiclib.originals.retry_progress=Скачивание %s...
 archaiclib.originals.retry_ok=Готово! Перезапусти игру.
 archaiclib.originals.retry_fail=Не скачалось файлов: %s - скачай их вручную.
+
+archaiclib.jei.materials=Материалы:

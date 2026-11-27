@@ -65,8 +65,22 @@ public class LegacyChunkGenerator extends ChunkGeneratorOverworld {
         long a = r.nextLong() / 2L * 2L + 1L, b = r.nextLong() / 2L * 2L + 1L;
         r.setSeed((long) x * a + (long) z * b ^ world.getSeed());
         net.minecraft.util.math.ChunkPos cp = new net.minecraft.util.math.ChunkPos(x, z);
-        for (net.minecraft.world.gen.structure.MapGenStructure s : structures) s.generateStructure(world, r, cp);
+        if (structDepth > 0) { // re-entrant populate (cascading chunk load): defer, the outer call is iterating StructureStart components
+            pendingStructs.add(new Object[]{cp, r});
+            return;
+        }
+        structDepth++;
+        try {
+            for (net.minecraft.world.gen.structure.MapGenStructure s : structures) s.generateStructure(world, r, cp);
+            while (!pendingStructs.isEmpty()) {
+                Object[] p = pendingStructs.remove(0);
+                for (net.minecraft.world.gen.structure.MapGenStructure s : structures)
+                    s.generateStructure(world, (Random) p[1], (net.minecraft.util.math.ChunkPos) p[0]);
+            }
+        } finally { structDepth--; }
     }
+    private int structDepth = 0;
+    private final java.util.List<Object[]> pendingStructs = new java.util.ArrayList<>();
 
     @Override
     public void recreateStructures(Chunk chunk, int x, int z) {

@@ -16,7 +16,8 @@
     "v1710.ItemRenderer1710Mixin"
   ],
   "mixins": [
-    "v189.EntityFireballMixin"
+    "v189.EntityFireballMixin",
+    "WorldBlastBatchMixin"
   ],
   "server": [],
   "setSourceFile": true,

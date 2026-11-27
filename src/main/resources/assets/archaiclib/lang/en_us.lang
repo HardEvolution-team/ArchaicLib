@@ -16,3 +16,5 @@ archaiclib.originals.retry_none=Nothing to retry - use the links
 archaiclib.originals.retry_progress=Downloading %s...
 archaiclib.originals.retry_ok=Done! Restart the game to apply.
 archaiclib.originals.retry_fail=%s file(s) still failed - please download them manually.
+
+archaiclib.jei.materials=Materials:
